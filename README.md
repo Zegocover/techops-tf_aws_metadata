@@ -13,7 +13,7 @@ Usage
 
 ```hcl
 module "metadata" {
-  source = "github.com/zegocover/techops-tf_metadata"
+  source = "github.com/zegocover/techops-tf_aws_metadata"
   marker = "productionvpc"
 }
 
