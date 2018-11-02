@@ -33,3 +33,8 @@ output "vpc_private_subnets" {
   description = "List of private subnets"
   value       = ["${sort(distinct(data.aws_subnet.private.*.id))}"]
 }
+
+output "vpn_cidr" {
+  description = "IP range used by VPN"
+  value       = "${lookup(data.aws_vpc.this.tags, "vpn_cidr", "")}"
+}
