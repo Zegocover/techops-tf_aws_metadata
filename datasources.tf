@@ -7,7 +7,7 @@ data "aws_vpc" "this" {
 data "aws_subnet_ids" "public" {
   vpc_id = "${data.aws_vpc.this.id}"
 
-  tags {
+  tags = {
     type = "public"
   }
 }
@@ -15,7 +15,7 @@ data "aws_subnet_ids" "public" {
 data "aws_subnet_ids" "private" {
   vpc_id = "${data.aws_vpc.this.id}"
 
-  tags {
+  tags = {
     type = "private"
   }
 }
