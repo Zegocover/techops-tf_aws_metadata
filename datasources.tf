@@ -1,6 +1,6 @@
 data "aws_vpc" "this" {
   tags = {
-    Name = var.marker
+    marker = var.marker
   }
 }
 
