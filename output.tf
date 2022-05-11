@@ -14,6 +14,11 @@ output "vpc_private_subnets_ids" {
   value = sort(data.aws_subnet_ids.private.ids)
 }
 
+output "vpc_secondary_private_subnets_ids" {
+  description = "Subnet IDs for any secondary CIDR ranges which have been added to the VPC"
+  value       = sort(data.aws_subnet_ids.private_secondary.ids)
+}
+
 output "vpc_public_route_table_ids" {
   description = "List of IDs of public route tables"
   value       = sort(distinct(data.aws_route_table.public.*.id))

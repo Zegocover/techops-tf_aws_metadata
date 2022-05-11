@@ -20,6 +20,14 @@ data "aws_subnet_ids" "private" {
   }
 }
 
+data "aws_subnet_ids" "private_secondary" {
+  vpc_id = data.aws_vpc.this.id
+
+  tags = {
+    type = "private-secondary"
+  }
+}
+
 data "aws_route_table" "public" {
   count     = length(data.aws_subnet_ids.public.ids)
   subnet_id = element(sort(tolist(data.aws_subnet_ids.public.ids)), count.index)
