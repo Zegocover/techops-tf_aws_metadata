@@ -7,11 +7,11 @@ output "vpc_cidr" {
 }
 
 output "vpc_public_subnets_ids" {
-  value = sort(data.aws_subnet_ids.public.ids)
+  value = local.public_subnet_ids
 }
 
 output "vpc_private_subnets_ids" {
-  value = sort(data.aws_subnet_ids.private.ids)
+  value = local.private_subnet_ids
 }
 
 output "vpc_public_route_table_ids" {
@@ -26,12 +26,12 @@ output "vpc_private_route_table_ids" {
 
 output "vpc_public_subnets" {
   description = "List of public subnets"
-  value       = sort(distinct(data.aws_subnet.public.*.id))
+  value       = local.public_subnet_ids
 }
 
 output "vpc_private_subnets" {
   description = "List of private subnets"
-  value       = sort(distinct(data.aws_subnet.private.*.id))
+  value       = local.private_subnet_ids
 }
 
 output "vpn_cidr" {
