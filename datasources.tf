@@ -6,12 +6,12 @@ data "aws_vpc" "this" {
 
 data "aws_route_table" "public" {
   count     = length(local.public_subnet_ids)
-  subnet_id = element(sort(tolist(local.public_subnet_ids)), count.index)
+  subnet_id = element(local.public_subnet_ids, count.index)
 }
 
 data "aws_route_table" "private" {
   count     = length(local.private_subnet_ids)
-  subnet_id = element(sort(tolist(local.private_subnet_ids)), count.index)
+  subnet_id = element(local.private_subnet_ids, count.index)
 }
 
 data "aws_subnets" "public" {
