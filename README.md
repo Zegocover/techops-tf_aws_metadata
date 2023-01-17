@@ -3,6 +3,11 @@
 
 This module is used as a metadata _service_ that given VPC marker (name) exposes attributes of that VPC as output resources which can be consumed by other Terraform resources, without having to duplicate the `data_source` logic.
 
+Requirements
+------------
+
+Minimum v3.55 of the AWS Provider
+
 Input variables
 ---------------
 
