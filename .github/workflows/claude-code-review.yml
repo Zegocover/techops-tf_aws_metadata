@@ -1,0 +1,11 @@
+name: Claude Code Review
+on:
+  pull_request:
+    types: [opened, ready_for_review, labeled]
+jobs:
+  review:
+    if: |
+      github.event.pull_request.draft == false &&
+      (github.event.action != 'labeled' || github.event.label.name == 'claude-review')
+    uses: Zegocover/shared-gha-workflows/.github/workflows/claude-code-review.yml@v1
+    secrets: inherit
