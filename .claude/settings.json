@@ -1,0 +1,62 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/git-safety.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/filesystem-safety.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/database-safety.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/terraform-safety.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git rev-parse:*)",
+      "Bash(git symbolic-ref:*)",
+      "Bash(git fetch:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull origin main)",
+      "Bash(git pull origin HEAD)",
+      "Bash(git push -u origin:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(rg:*)",
+      "Bash(fd:*)",
+      "Read(docs/**)",
+      "Read(.claude/**)",
+      "Write(.claude/scripts/_replies/**)",
+      "Bash(.claude/scripts/pr-comments.sh:*)",
+      "Bash(.claude/scripts/pr-reply.sh:*)",
+      "Bash(.claude/scripts/pr-issue-reply.sh:*)",
+      "Bash(.claude/scripts/pr-resolve.sh:*)",
+      "Bash(.claude/scripts/req-branch.sh:*)",
+      "Bash(.claude/scripts/req-pr.sh:*)"
+    ],
+    "deny": [
+      "Bash(find:*)",
+      "Bash(grep:*)"
+    ]
+  }
+}
