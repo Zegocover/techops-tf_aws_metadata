@@ -488,6 +488,97 @@ git push
 
 ---
 
+### Stage 9b — Refresh PR description
+
+**Skip check:** evaluate the skip predicate defined in Stage 5 (the same
+predicate that governs Stages 5, 7, 8, and 9 — true when every `will-fix` entry
+recorded `skipped-no-changes`). If the predicate is **true**, no code was
+changed this run, the description cannot have gone stale from this run, and
+Stage 9b is a **no-op**: spawn no sub-agent and record the description refresh as
+*not applicable* in the Stage 11 summary. Proceed directly to Stage 10.
+
+Otherwise (the predicate is false — code was committed and pushed this run),
+spawn a fresh Agent to check whether the PR description is now stale relative to
+this run's fixes and refresh it if so. The orchestrator never edits the PR body
+itself — it briefs a sub-agent, matching the Stage 4/5 pattern.
+
+Spawn the Agent with this brief (substitute the literal `PR_NUM` and
+`COMMIT_SHA` values):
+
+```
+You are refreshing a PR description after a round of review-comment fixes.
+Do not ask questions — read the inputs below, decide whether the body is now
+stale, and edit it only if it is. Edit the existing PR only — you must NEVER
+call `gh pr create`.
+
+PR number: {PR_NUM}
+This run's fixer commit SHA: {COMMIT_SHA}
+
+Read the current PR body:
+
+  gh pr view {PR_NUM} --json body
+
+If that command exits non-zero, return immediately:
+
+  refresh_action: failed
+  reason: could not read PR body: {error}
+
+(do not attempt any edit). This is non-fatal — just return.
+
+Otherwise, read this run's file-level changes:
+
+  git diff --name-status {COMMIT_SHA}~..HEAD
+
+Compare the current body against those changes. The body is *inaccurate* only
+when this run's diff contradicts it — e.g. a file the body names was renamed or
+deleted, or a change the body describes no longer matches the diff. If the body
+is still accurate relative to this run's diff, make NO edit and return:
+
+  refresh_action: unchanged
+  reason: {one line — body verified accurate against this run's diff}
+
+Do NOT rewrite an otherwise-correct body for style. Reflect only what this
+run's diff changed.
+
+If the body IS inaccurate, rewrite it preserving the existing structure and the
+team's PR-body conventions, then apply the edit with a HEREDOC:
+
+gh pr edit {PR_NUM} --body "$(cat <<'EOF'
+...refreshed body...
+EOF
+)"
+
+Body-derivation rules (do NOT duplicate them here — follow them by reference):
+- `docs/ai/steering/base/pull-requests.md` rule 8 — the body must match the
+  template.
+- `.claude/skills/create-pr/SKILL.md` Stage 6 — when
+  `.github/PULL_REQUEST_TEMPLATE.md` is present, preserve every template heading
+  in the template's order; when absent, use the Background/Changes/Jira Ticket/s
+  fallback. Honour the section-heading synonyms, and strip HTML comments
+  (`<!-- ... -->`) and `{placeholder}` syntax from the final body.
+
+If `gh pr edit` exits non-zero, return:
+
+  refresh_action: failed
+  reason: {the gh pr edit error}
+
+This is non-fatal — just return.
+
+On a successful edit, return:
+
+  refresh_action: updated
+  reason: {one line — what about the body went stale and was corrected}
+  Edit applied to PR {PR_NUM}.
+```
+
+Wait for the sub-agent to return. Record its `refresh_action`
+(`updated` / `unchanged` / `failed`) and reason for the Stage 11 summary.
+
+**Stage 9b never aborts the skill.** Whatever the sub-agent returns — including
+both error markers — record the outcome and proceed to Stage 10.
+
+---
+
 ## Gate 3 — Resolve
 
 ---
@@ -699,7 +790,16 @@ Skipped (no changes): {count}
 Failed (max iterations): {count}  {list findings file paths if any}
 Failed (resolve only): {count}
 Failed (reply): {count}
+
+PR description refresh: {updated | left unchanged | failed | not applicable}  {one-line reason}
 ```
+
+The PR description refresh line reports the Stage 9b `refresh_action`:
+- `refresh_action: updated` → `updated`
+- `refresh_action: unchanged` → `left unchanged`
+- `refresh_action: failed` → `failed`
+- Stage 9b skipped (skip predicate true — no code changed this run) →
+  `not applicable`
 
 Display rules for the File:Line column are the same as Stage 3.
 
@@ -771,3 +871,20 @@ Display rules for the File:Line column are the same as Stage 3.
   nothing to validate.
 - **Commit fixer work before CI validation.** The confirm-before-commit gate is
   removed — show the summary table but proceed without waiting.
+- **Refresh the PR description after push, before replies.** Stage 9b runs only
+  when the Stage 5 skip predicate is false — when no code changed this run it is
+  a no-op and Stage 11 records the refresh as not applicable. It detects a stale
+  body relative to this run's diff and refreshes it via the sub-agent.
+- **Edit the existing PR only — never `gh pr create`.** Stage 9b updates the PR
+  body with `gh pr edit {PR_NUM} --body ...` and must never open a new PR
+  (`pull-requests.md` rule 6). At most one `gh pr edit` call per run.
+- **Preserve body structure and conventions.** A refreshed body must keep the
+  `.github/PULL_REQUEST_TEMPLATE.md` headings and order when a template is
+  present, else the Background/Changes/Jira Ticket/s fallback, and must strip
+  HTML comments and `{placeholder}` syntax — per `create-pr` Stage 6
+  (`pull-requests.md` rule 8). Reflect only what this run's diff changed; do not
+  rewrite an otherwise-correct body for style.
+- **Description refresh is non-fatal.** A `gh pr view` failure returns
+  `refresh_action: failed`; a `gh pr edit` failure returns
+  `refresh_action: failed`. Both are recorded in Stage 11 and the skill
+  proceeds to Stage 10 — Stage 9b must never abort the skill.

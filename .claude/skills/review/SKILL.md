@@ -45,7 +45,8 @@ other unrecognised `--`-token.
 This stage runs ONLY when `review` is invoked standalone. It is a **pure
 prepend**: review's existing Stage 1 and below are UNCHANGED — there is no
 renumbering. Internal callers (`task-implementer.md` Stage 3a,
-`.claude/skills/fix-pr-comments/SKILL.md`, `.claude/skills/fix-buildkite/SKILL.md`) invoke
+`.claude/skills/fix-pr-comments/SKILL.md`, `.claude/skills/fix-buildkite/SKILL.md`,
+`.claude/skills/fix-bug/SKILL.md` Stage 7a) invoke
 review "from Stage 1" and therefore enter BELOW this gate and skip it. This
 is the load-bearing structural guard described in ADR 011 — it is what
 prevents implement's Stage 3 review loop from deadlocking on the
@@ -164,6 +165,9 @@ Determine which groups are active:
 - **F** — active only if the changed file list contains any `.py` files
 - **G** — active only if the changed file list contains any `.proto` files or files with `converter` in the path. Also confirm `docs/ai/steering/domains/protobuf-converters.md` exists — if the trigger fires but the file is missing, record a validation error and skip Group G.
 - **H** — always active
+- **I** — active only if the changed file list contains any `.tf` or `.tfvars` files. Also confirm `docs/ai/steering/languages/hcl.md` exists — if the trigger fires but the file is missing, record a validation error and skip Group I.
+- **J** — active only if the changed file list contains any `.scala` files
+- **L** — always active. The Group L sub-agent invokes the `audit-financial-integrity` skill against the diff (see Stage 4 brief). If the `audit-financial-integrity` skill is missing from `.claude/skills/`, record a validation error and skip Group L.
 
 `TASK_SPEC_PATH` (the path captured above when Group E activates, or empty when no task spec was found for the ticket) is a stage-scoped value that Stage 2b reads directly. Do not re-run the `rg -l "^ticket: {TICKET}$" docs/tasks/` lookup in Stage 2b.
 
@@ -312,9 +316,12 @@ Group-specific context to append to the brief:
   ```
 
   Note: also log the matched task spec path (and all design doc paths if found) in the review report so they are visible.
-- **Group F:** Standard file is `docs/ai/steering/languages/python.md`. Check every new or modified Python file against Python conventions (including the Python-specific environment/config rules in that file).
+- **Group F:** Standard file is `docs/ai/steering/languages/python.md`. Check every new or modified Python file against Python conventions (including the Python-specific environment/config rules in that file). Honour that file's Applicability section, as Groups B and H honour theirs: it splits the standard into an intrinsic core that applies to any Python in the diff and project-structure/tooling rules that bind only where the repo has already adopted the scaffolding (the `tests/unit`/`tests/integration` split, the `pyproject.toml` coverage floor, pytest/LocalStack tooling, the `BaseSettings` plumbing) — gate the latter by surface presence and note an advisory at most where it is absent. The single-config-entry-point *principle* is intrinsic: a module scattering `os.getenv()` calls is flaggable even where the repo has no `BaseSettings` entry point.
 - **Group G:** Standard file is `docs/ai/steering/domains/protobuf-converters.md`. Check every new or modified proto and converter file.
 - **Group H:** Standard files are `docs/ai/steering/base/error-handling.md`, `docs/ai/steering/base/file-organisation.md`, `docs/ai/steering/base/resilience.md`, and `docs/ai/steering/base/spelling.md`. Check error handling patterns, file sizes and structure, retry/timeout/idempotency logic, and human-readable text spelling. Honour each file's Applicability section: translate error-handling's "exception" vocabulary into the diff's language idiom (typed-result patterns such as Rust/Swift `Result`, Scala `Either`/`Try`, or Go `(value, error)`) rather than applying it literally, and read file-organisation's line-count targets as language-relative signals — do not raise findings against verbose languages or framework-shaped files on a literal line count. Gate by surface presence, not by classifying the repo's stack.
+- **Group I:** Standard file is `docs/ai/steering/languages/hcl.md`. Check every new or modified Terraform file (`.tf`, `.tfvars`) against HCL/Terraform conventions: canonical file layout, typed variables with validation, workspace + env tfvars pattern, exact `required_version` and pessimistic provider pinning, committed lockfiles, S3 backend with DynamoDB locking, Secrets Manager / `secrets-config` for secrets, `default_tags` on the AWS provider, Buildkite-enforced `fmt`/`tflint`/`validate`, plan-as-artefact pattern, and module extraction with terraform-docs and strict semver tags.
+- **Group J:** Standard file is `docs/ai/steering/languages/scala.md`. Check every new or modified Scala file against Scala conventions (including the Scala-specific concurrency, config, and testing rules in that file).
+- **Group L:** No standard rule file in the per-group sense — Group L delegates to the `audit-financial-integrity` skill. Instruct the sub-agent to: (1) invoke the `audit-financial-integrity` skill (its SKILL.md is at `.claude/skills/audit-financial-integrity/SKILL.md`) against the current diff, providing the same diff inputs the other groups receive; (2) parse the skill's verdict and findings — the skill produces a structured set of findings with severities (critical / high / medium / low); (3) translate into the standard `## Output format` from `code-review.md` using the mapping defined in Group L's section: critical/high → `[blocker]`, medium → `[error]`, low → `[warning]`; (4) emit a single `[pass]` line if the audit returns a clean verdict; (5) preserve the skill's never-approve discipline — Group L's findings exist to make suspicious patterns visible to the human reviewer, not to autonomously block or approve. Do not flatten the skill's threat-catalogue context — quote the relevant catalogue and issue text in each YAML finding's `issue` field. If the `audit-financial-integrity` skill is not present in `.claude/skills/`, record a validation error and emit one `[advisory]` line stating the skill is missing; do not fail the verdict on tool absence.
 
 If a sub-agent returns malformed output or fails: retry that group once. If it fails again, run that group's checks inline in the orchestrator. Do not silently drop a group — every active group must produce output.
 
@@ -375,7 +382,7 @@ Write to: `docs/ai/reviews/{TICKET}-{slug}-{revision}.md`
 
 ## Review detail
 
-{Per-check blocks from all sub-agents in group order: A → B → C → D → E → F → G → H.
+{Per-check blocks from all sub-agents in group order: A → B → C → D → E → F → G → H → I → J → L.
 Each block is the sub-agent's per-check output verbatim — tagged lines only, no prose.}
 
 ## Validation errors

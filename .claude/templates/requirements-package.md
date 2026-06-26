@@ -28,16 +28,16 @@
 
 {Numbered requirements. Each requirement starts with a verb, is independently testable, and makes no implementation assumptions.}
 
-FR-01: {Verb-first, specific, testable requirement}
-FR-02: {Verb-first, specific, testable requirement}
+- **FR-01:** {Verb-first, specific, testable requirement}
+- **FR-02:** {Verb-first, specific, testable requirement}
 
 ## Acceptance criteria
 
 {Gherkin format. Each criterion is linked to a functional requirement by ID.}
 
-AC-01 (FR-01): Given {context}, when {action}, then {outcome}
-AC-02 (FR-01): Given {context}, when {action}, then {outcome}
-AC-03 (FR-02): Given {context}, when {action}, then {outcome}
+- **AC-01 (FR-01):** Given {context}, when {action}, then {outcome}
+- **AC-02 (FR-01):** Given {context}, when {action}, then {outcome}
+- **AC-03 (FR-02):** Given {context}, when {action}, then {outcome}
 
 ## Edge cases and error states
 
@@ -52,8 +52,8 @@ AC-03 (FR-02): Given {context}, when {action}, then {outcome}
 
 {Performance, security, compliance constraints. Specific and measurable — not "it should be fast."}
 
-NFR-01: {Specific, measurable non-functional requirement}
-NFR-02: {Specific, measurable non-functional requirement}
+- **NFR-01:** {Specific, measurable non-functional requirement}
+- **NFR-02:** {Specific, measurable non-functional requirement}
 
 ## Open questions
 

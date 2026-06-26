@@ -30,7 +30,9 @@ export const meta = {
 //     concurrency is auto-capped at min(16, cores - 2) by `parallel`.
 //
 // The authoritative contract is the design's `## Interface contracts` (contracts
-// 1, 2, 3, 5) in docs/design/AIDEV-122-review-gates-as-a-workflow-orchestration.md.
+// 1, 2, 3, 5) in docs/design/AIDEV-132-launch-safe-write-design-doc-max-gates.md
+// (the argument contract was relocated there from the original AIDEV-122 design
+// per ADR 014).
 
 // ----- dispatch configuration -----
 //
@@ -47,7 +49,10 @@ export const meta = {
 //
 // `context` is the set of scoped context categories for the check; each category
 // resolves to a concrete Read instruction in the check-agent prompt:
-//   "steering"  -> "Read all files under `docs/ai/steering/`"
+//   "steering"  -> the curated steeringIndex plus a relevance rule (read the full
+//                  text only of plausibly-relevant docs; read when uncertain);
+//                  when steeringIndex is null, degrade to "Read all files under
+//                  `docs/ai/steering/`" with a notice
 //   "codebase"  -> an explicit list of the codebaseFilePaths to Read
 //   (no entry)  -> nothing beyond the artefact (and inline requirements text)
 
@@ -225,11 +230,30 @@ function emptyStats() {
 // ----- prompt builders -----
 
 // Resolve a config `context` set into concrete prompt Read instructions.
-function contextInstructions(context, codebaseFilePaths) {
+function contextInstructions(context, codebaseFilePaths, steeringIndex) {
   const lines = [];
   for (const category of context) {
     if (category === "steering") {
-      lines.push("Read all files under `docs/ai/steering/`.");
+      if (typeof steeringIndex === "string" && steeringIndex.trim() !== "") {
+        lines.push(
+          "A curated index of the steering docs is provided below. Read the " +
+            "full text only of the docs whose one-line description is " +
+            "plausibly relevant to the artefact under review; when you are " +
+            "uncertain whether a doc is relevant, read it. Do not skip a doc " +
+            "you have any reason to think might apply.\n" +
+            steeringIndex,
+        );
+      } else {
+        // Null index — the curated lists could not be parsed, or they parsed
+        // but were incomplete (the completeness cross-check found an omitted
+        // normative doc). Degrade to the legacy read-all behaviour with an
+        // explicit notice so steering compliance is never silently skipped.
+        lines.push(
+          "No steering index was provided (the curated lists could not be " +
+            "parsed, or were incomplete); degrading to read-all. Read all " +
+            "files under `docs/ai/steering/`.",
+        );
+      }
     } else if (category === "codebase") {
       if (codebaseFilePaths.length === 0) {
         lines.push("No codebase files are in scope for this review; read none.");
@@ -249,6 +273,7 @@ function checkPrompt({
   designPath,
   requirementsText,
   codebaseFilePaths,
+  steeringIndex,
   round,
 }) {
   const rubricPath = `${CHECKS_DIR}/${check.name}.md`;
@@ -273,7 +298,11 @@ function checkPrompt({
     `- The artefact under review at \`${artefactPath}\`.`,
     `- The design document at \`${designPath}\` (the source of design context).`,
   ];
-  for (const instruction of contextInstructions(check.context, codebaseFilePaths)) {
+  for (const instruction of contextInstructions(
+    check.context,
+    codebaseFilePaths,
+    steeringIndex,
+  )) {
     lines.push(`- ${instruction}`);
   }
   if (requirementsText !== null && requirementsText !== undefined) {
@@ -350,9 +379,17 @@ function aggregationPrompt({
     `Write the result to \`${outputPath}\`. The file content is: a header ` +
       "(ticket, gate type, round, artefact path, prior-round path), then the " +
       "severity-grouped findings (each carrying the six fields plus its " +
-      "`new`/`persisted-from-round-N` annotation). Write the file even when " +
-      "dismissal-filtering empties the findings (the findings section is then " +
-      "empty but the file is still written).",
+      "`new`/`persisted-from-round-N` annotation). You MUST write the file on " +
+      "ANY zero-finding round, regardless of cause — both when the surviving " +
+      "check agents returned no findings at all (the input findings arrays are " +
+      "all empty from the start) AND when findings were present but " +
+      "dismissal-filtering removed every one. In either case the findings " +
+      "section is empty but the file is still a valid, fully-written findings " +
+      "file: its header (ticket, gate type, round, artefact path, " +
+      "prior-round path) followed by an empty findings section — never a " +
+      'skipped write. Do not treat "nothing to aggregate" as "nothing to ' +
+      'write": always Write the file and return `fileWritten: true` on a ' +
+      "successful write, even when the input findings arrays are all empty.",
     "",
     "Notices input (per-check failure/skip strings collected by the script):",
     noticesJson,
@@ -479,7 +516,8 @@ let gateType,
   ticket,
   artefactSlug,
   round,
-  priorFindingsPath;
+  priorFindingsPath,
+  steeringIndex;
 try {
   const input = typeof args === "string" ? JSON.parse(args) : args;
   ({
@@ -492,6 +530,7 @@ try {
     artefactSlug,
     round,
     priorFindingsPath,
+    steeringIndex,
   } = input);
 } catch {
   return result({
@@ -567,6 +606,7 @@ const tasks = dispatch.map((check) => () => {
     designPath,
     requirementsText,
     codebaseFilePaths,
+    steeringIndex,
     round,
   });
   return runCheck(check, prompt);
@@ -590,28 +630,21 @@ for (const r of checkResults) {
 }
 const checksRun = dispatch.length;
 
-// Outcome ladder — evaluated in this exact order. The "survivors.length > 0"
-// precondition on the first branch closes the JS vacuous-truth back door:
-// [].every(predicate) is true, so without it a zero-survivors round would also
-// satisfy the all-empty test and mis-route to ZERO_FINDINGS_WARNING.
-const allSurvivorsEmpty =
-  survivors.length > 0 && survivors.every((r) => r.findings.length === 0);
-
-if (allSurvivorsEmpty && round === 1) {
-  // Round 1, at least one check survived AND every survivor returned empty
-  // findings. The first-round "finds nothing is suspicious" bias applies, so
-  // this is surfaced as a warning. Pure-JS — no aggregation agent on this
-  // round-1 branch. A failed check rides in `notices` and does NOT demote the
-  // round to PASS. On round 2+ an all-empty sweep is NOT short-circuited here:
-  // it falls through to the aggregation path below and clears as PASS.
-  return result({
-    findingsPath: null,
-    outcome: "ZERO_FINDINGS_WARNING",
-    report: ZERO_FINDINGS_WARNING_TEXT,
-    notices,
-    stats: { checksRun, checksFailed, findingCounts: zeroCounts() },
-  });
-}
+// Outcome ladder — evaluated in this exact order. Round 1 always writes a
+// findings file: a round-1 all-empty sweep is no longer short-circuited here as
+// a pure-JS ZERO_FINDINGS_WARNING with findingsPath: null. Instead every round
+// with at least one survivor falls through to the aggregation path below, which
+// writes the (empty-or-not) findings file via the aggregation agent; the
+// post-aggregation report.length === 0 redirect then decides the round-aware
+// outcome — ZERO_FINDINGS_WARNING (findingsPath set) on round 1, PASS on
+// round >= 2 — so the Per-round commit trigger and the (count, round) recovery
+// heuristic both have a file to act on. A failed check rides in `notices` and
+// does NOT demote the round. The zero-survivors NOTICES_ONLY branch stays first
+// after the dispatch: it must not fall into the aggregation path (there is
+// nothing to aggregate), and its survivors.length === 0 guard keeps it mutually
+// exclusive with the all-empty round-1 ZERO_FINDINGS_WARNING that the
+// aggregation path produces — preserving the AIDEV-129 invariant that a
+// zero-survivors round is NOTICES_ONLY, never ZERO_FINDINGS_WARNING.
 
 if (survivors.length === 0) {
   // Zero survivors (every dispatched check failed its retry) — NOTICES_ONLY.
@@ -624,17 +657,18 @@ if (survivors.length === 0) {
   });
 }
 
-// Either at least one surviving check returned a non-empty findings array, OR
-// this is a round 2+ all-empty sweep falling through to the aggregation path
-// (the round-1 ZERO_FINDINGS_WARNING short-circuit above no longer fires on
-// round 2+, so a converged clean sweep aggregates and clears as PASS) — run the
-// aggregation agent. The script passes its accumulated `notices` so the agent
-// can append a `## Notices` section to the on-disk file.
+// Every surviving round reaches the aggregation agent now: at least one
+// surviving check returned a non-empty findings array, OR this is an all-empty
+// sweep (any round) falling through to write the findings file. The round-1
+// ZERO_FINDINGS_WARNING no longer short-circuits before aggregation — round 1
+// always writes a file, and the round-aware outcome is decided post-aggregation
+// at the report.length === 0 redirect below. The script passes its accumulated
+// `notices` so the agent can append a `## Notices` section to the on-disk file.
 phase("Aggregate");
 const outputPath = findingsFilePath(ticket, artefactSlug, round);
 // Pass every survivor's array to aggregation (including empty ones — the round
-// reached here because at least one survivor was non-empty, OR this is a
-// round 2+ all-empty sweep falling through to the aggregation path).
+// reached here because at least one survivor was non-empty, OR this is an
+// all-empty sweep falling through to the aggregation path to write the file).
 const survivingResults = survivors.map((r) => ({
   check: r.check,
   findings: r.findings,
@@ -675,9 +709,26 @@ const findingCounts = countSeverities(report);
 const stats = { checksRun, checksFailed, findingCounts };
 
 if (report.length === 0) {
-  // All surviving findings dismissal-filtered away — PASS. The file is still
-  // written (durable record). `notices` survives the PASS path so SKILL.md can
-  // surface a failed check, and the agent appended them on disk too.
+  // The post-aggregation report is empty — either an all-empty survivor sweep or
+  // an all-dismissed sweep (findings present, all dismissal-filtered away). The
+  // file is still written (durable record). This point is round-aware and must
+  // REDIRECT round 1, not merely exclude it: a bare `round !== 1` guard on a
+  // PASS branch would let an excluded round-1 empty report fall through to the
+  // FINDINGS branch below with an empty `report`, violating the contract. So
+  // round 1 returns ZERO_FINDINGS_WARNING with findingsPath SET (the AIDEV-129
+  // round-1 "finds nothing is suspicious" surface, now with a written file);
+  // round >= 2 returns PASS (a converged clean or fully-dismissed sweep).
+  // `notices` survives either path so SKILL.md can surface a failed check, and
+  // the agent appended them on disk too.
+  if (round === 1) {
+    return result({
+      findingsPath: outputPath,
+      outcome: "ZERO_FINDINGS_WARNING",
+      report: ZERO_FINDINGS_WARNING_TEXT,
+      notices,
+      stats,
+    });
+  }
   return result({
     findingsPath: outputPath,
     outcome: "PASS",

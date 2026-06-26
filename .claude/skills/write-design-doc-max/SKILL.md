@@ -212,10 +212,33 @@ single hyphen, trim leading/trailing hyphens, truncate to 40 chars.
 mkdir -p docs/design
 ```
 
+Write the design-writer synthesis to a temp file, then dispatch the writer
+against its path — do NOT pass the structured interview outputs inline.
+Inlining them recharges the full payload as cache-read on every subsequent
+orchestrator turn; passing a path keeps the persistent context small.
+
+```bash
+mkdir -p .tmp
+```
+
+Write the synthesis file `.tmp/{TICKET}-design-synthesis.md` holding every
+field the design-writer needs — all structured interview outputs (Stages 2–10)
+plus `feature_name`, `requirements_source_path`, `branch`, `ticket`,
+`engineer`, `date` — as labelled Markdown sections (one `## {field}` heading
+per field). At this initial write the Stage 2–10 outputs are freshly in hand,
+so write them directly.
+
 Read `.claude/skills/write-design-doc-max/design-writer.md` in full. Dispatch to it via
-the Agent tool: pass the sub-agent file content as the prompt; pass all
-structured interview outputs (Stages 2–10) as named fields in the user message,
-plus `feature_name`, `requirements_source_path`, `branch`, `ticket`, `engineer`, `date`.
+the Agent tool: pass the sub-agent file content as the prompt; pass
+`synthesis_path` = `.tmp/{TICKET}-design-synthesis.md` as the single named
+field in the user message (the writer reads every field from that file).
+
+After the writer returns — on BOTH success and failure — delete the synthesis
+temp file:
+
+```bash
+rm -f .tmp/{TICKET}-design-synthesis.md
+```
 
 If the sub-agent fails or returns empty output: surface the error to the
 engineer and offer to retry. Do not advance silently.
@@ -254,21 +277,32 @@ needs to act on it, and does not re-author it.
 fields defined in `.claude/skills/write-design-doc-max/check-principles.md`: `Severity`
 (`Critical` / `High` / `Medium` / `Nit pick`), `Issue`, `Why it matters`,
 `Size of fix` (`trivial` / `local` / `broad`), `Target` (`load-bearing` /
-`illustrative`), and `Suggested resolution`. `Severity` is the routing key;
-`Size of fix` and `Target` are advisory inputs that tune the recommendation.
+`illustrative`), and `Suggested resolution`. Separately, at disposition time the
+engineer may flag the finding design-upstream; this flag is an engineer action
+applied during disposition, not a field the reviewer emits. Whether the finding
+is **design-upstream** is the routing key (see *Routing key:
+design-upstream-ness* below); `Severity`, `Size of fix`, and `Target` are
+advisory inputs that tune the recommendation, and `Severity` is additionally the
+triage axis the gate-level escape uses.
 
 **The four dispositions.**
 
 - **Fix — full ladder.** The heavyweight path: revise the design → re-run the
   design gate → regenerate all task specs from scratch → re-review each. This
-  is the existing Stage 14b revision ladder (steps 1–7). Use it for any finding
-  at or above the severity floor, or any finding the engineer flags as
-  design-upstream.
+  is the existing Stage 14b revision ladder (steps 1–7). Use it for a
+  **design-upstream** finding — one whose resolution requires editing the Design
+  Document itself — at any severity, or any finding the engineer flags
+  design-upstream. When task specs already exist, a mandatory cost warning
+  precedes it (see *Mandatory full-ladder cost warning* below); it is never the
+  silent default.
 - **Fix — spec patch.** The lightweight path: patch the single affected task
   spec, then re-review that whole spec (a full re-review, not a diff), looping
   on that one spec until it is clean. It never regenerates or rewrites any
-  sibling spec. Only available once task specs exist — it is absent at the
-  design gate (Stage 12b), which has no specs.
+  sibling spec. It is the route for a **spec-local** finding — one resolvable by
+  editing only the affected spec — at **any severity, including High or
+  Critical**: severity alone never escalates a spec-local finding to the full
+  ladder. Only available once task specs exist — it is absent at the design gate
+  (Stage 12b), which has no specs.
 - **Skip.** A low-value finding. Voiced once to the engineer, recorded in a
   session-scoped in-memory skip set, and NEVER written to `## Dismissals` or
   any other on-disk section. Skip is the default auto-recommendation for
@@ -277,44 +311,80 @@ fields defined in `.claude/skills/write-design-doc-max/check-principles.md`: `Se
   `## Dismissals` (see below). Dismiss is always an engineer choice — it is
   never auto-recommended.
 
-**Severity floor.** A finding whose `Severity` is `High` or above
-(`High` / `Critical`), or any finding the engineer flags as design-upstream,
-sits at or above the floor and is recommended for the **Fix — full ladder**
-path. A spec-local finding below the floor (`Medium` / `Nit pick`) is
-recommended for the **Fix — spec patch** path when specs exist.
+**Routing key: design-upstream-ness.** Per ADR 014
+(`docs/decisions/014-launch-safe-advisory-gates.md`), the routing key is whether
+a finding is **design-upstream**, NOT its severity. A finding is design-upstream
+when resolving it requires editing a section of the **Design Document** —
+`## Approach`, `## Components affected`, `## Interface contracts`,
+`## Task breakdown`, `## Test strategy`, `## Risks and constraints`, or
+`## ADR references`. A design-upstream finding (at any severity) is recommended
+for the **Fix — full ladder** path. A finding that is not design-upstream is
+**spec-local** — resolvable by editing only the affected task spec — and is
+recommended for the **Fix — spec patch** path when specs exist, at **any
+severity, including High or Critical**.
+
+Severity is no longer the routing key: it is an advisory input that, with `Size
+of fix` and `Target`, tunes the recommendation, and it is the triage axis the
+gate-level escape uses. A High or Critical finding that is spec-local routes to
+spec-patch; a Medium or Nit-pick finding that is design-upstream routes to the
+full ladder. The engineer may flag any finding design-upstream (forcing the full
+ladder) or accept the spec-local inference, and that flag overrides the
+inference in either direction.
+
+**Ambiguity defaults to spec-local.** When a finding's design-upstream-ness is
+unclear, recommend the contained, non-destructive **Fix — spec patch** path (or,
+at a gate with no specs, **Skip** voiced for confirmation), and voice the
+reasoning. Uncertainty must NEVER route to the full ladder — it must never
+trigger a spec-clearing regeneration.
+
+**Mandatory full-ladder cost warning.** Whenever a full ladder would fire and
+task specs already exist, the orchestrator MUST first voice an explicit cost
+warning: that taking the ladder regenerates all N task specs from scratch and
+re-runs every per-task gate — a significant time and cost hit — and MUST offer
+the **Fix — spec patch** path as the alternative. The full ladder is never the
+silent default.
 
 **Recommendation heuristic.** Compute one recommended disposition per finding:
 
-1. `Severity` ≥ `High`, or engineer-flagged design-upstream → **Fix — full ladder**.
+1. Design-upstream (its resolution requires editing a Design-Document section),
+   or engineer-flagged design-upstream → **Fix — full ladder** (preceded by the
+   mandatory cost warning when specs exist).
 2. Otherwise, a low-value finding → **Skip**. Low-value means low on the
    combined severity-and-size scale: especially low severity at `broad` size,
    or an `illustrative` `Target`.
-3. Otherwise, a spec-local sub-floor finding (`Medium` / `Nit pick`) and specs
-   exist → **Fix — spec patch**.
-4. Otherwise (a sub-floor finding with no task specs yet — e.g. at the Stage 12b
+3. Otherwise, a spec-local finding (any severity, including High or Critical)
+   and specs exist → **Fix — spec patch**.
+4. Otherwise (a spec-local finding with no task specs yet — e.g. at the Stage 12b
    design gate) → **Skip**, voiced for engineer confirmation so the engineer can
    elevate or Dismiss it. Electing to fix such a finding at the design gate means
    the **Fix — full ladder** path — spec-patch is unavailable there.
+5. When design-upstream-ness is ambiguous → treat as spec-local (step 3 when
+   specs exist, else step 4), and voice the reasoning. Never escalate ambiguity
+   to the full ladder.
 
 `Dismiss` is never auto-recommended; it is only ever an engineer override.
 
 **Always voice, never auto-apply.** Every finding is presented to the engineer
 with its recommended disposition. Nothing is fixed, skipped, or dismissed
 without the engineer confirming the recommendation or overriding it. The
-severity floor and the recommendation heuristic produce a RECOMMENDATION, never
-an automatic action.
+design-upstream routing key and the recommendation heuristic produce a
+RECOMMENDATION, never an automatic action.
 
-**Design-upstream override.** The recommendation is never binding. The
-engineer may elevate any finding — including a sub-floor `Medium` or `Nit
-pick` — to the **Fix — full ladder** path, may downgrade a recommendation to
-**Skip**, or may choose **Dismiss** on any finding.
+**Design-upstream override.** The recommendation is never binding, and the
+engineer flag overrides the inference in both directions. The engineer may flag
+any finding — including a spec-local `High` or `Critical` — design-upstream to
+elevate it to the **Fix — full ladder** path, may accept the spec-local
+inference for a finding the model called design-upstream, may downgrade a
+recommendation to **Skip**, or may choose **Dismiss** on any finding.
 
 **Graceful degradation.** A finding arriving without `Size of fix` and/or
-`Target` degrades to severity-only routing — it never errors; the heuristic
-runs on `Severity` alone. A finding whose `Severity` is out-of-vocabulary or
-unparseable is treated as `High` and surfaced with a `[malformed finding:
-<reason>]` marker per ADR 010 — it routes conservatively (to the floor), never
-dropped.
+`Target` never errors; the heuristic runs on the design-upstream determination
+alone, with severity as the advisory input it still has. A finding whose
+`Severity` is out-of-vocabulary or unparseable is surfaced with a
+`[malformed finding: <reason>]` marker per ADR 010 — it still routes on its
+design-upstream determination (severity is advisory, not the routing key), and
+where that determination is itself unclear it defaults to spec-local per
+*Ambiguity defaults to spec-local* above, never dropped.
 
 **The session-scoped skip set.** Held purely in the orchestrator's working
 context for the duration of one gate loop. It is NOT written to any file and
@@ -346,6 +416,61 @@ the three gates remain individually attributable:
 
 `## Dismissals` is managed by SKILL.md only — check agents and reviewer
 sub-agents must not create or modify it.
+
+### gate-level escape
+
+Per ADR 014 (`docs/decisions/014-launch-safe-advisory-gates.md`), the gates are
+**advisory**: a FINDINGS round never forces the engineer to disposition every
+finding to make progress, and the loop is not unlimited. From round 1 onward,
+every FINDINGS round (Stage 12b, 14b, and 14c) opens with a **gate-level
+choice** over the whole surviving set, using `Severity` as the triage axis:
+
+- **skip** — clear the gate immediately, applying no fixes. The round's findings
+  file is already written and committed (see *Per-round commit*), so the
+  calibration trail survives even though nothing was actioned.
+- **only-highs** — act on the spec-local `High`-and-above findings (a single
+  spec-patch pass each, see below), surface any in-scope design-upstream finding
+  for elevate-or-skip, then clear. Does not re-run the gate.
+- **only-lows** — act on the spec-local sub-floor (`Medium` / `Nit pick`)
+  findings (a single spec-patch pass each), surface any in-scope design-upstream
+  finding for elevate-or-skip, then clear. Does not re-run the gate.
+- **fix-everything** — act on all findings per the per-finding routing above,
+  then **re-run the gate** (a fresh round) and repeat until the gate clears.
+  This is the only choice that re-runs the gate and the only one that runs the
+  routed fix paths to convergence.
+
+**Only fix-everything re-runs the gate.** skip, only-highs, and only-lows each
+clear the gate after their one-shot action; only fix-everything invokes a fresh
+round. Any choice is valid, including skip. Per-finding disposition (confirm,
+override design-upstream, Skip, Dismiss — *The disposition protocol* above)
+remains available within any "fix" choice (only-highs / only-lows /
+fix-everything); it is the gate-level choice that is relaxed, not the
+per-finding controls.
+
+**Scoped escapes run a single spec-patch pass, never the full ladder.** Under
+only-highs / only-lows, each in-scope **spec-local** finding receives a single
+**Fix — spec patch** pass (patch the affected spec, no re-review loop) and then
+the gate clears — the scoped escape does NOT enter spec-patch's "loop on that
+one spec until it is clean" inner loop. fix-everything still runs spec-patch to
+convergence per the full *Fix — spec patch* steps.
+
+**A design-upstream finding is NEVER run as a scoped one-pass.** Under
+only-highs / only-lows an in-scope **design-upstream** finding is surfaced with
+its mandatory full-ladder cost warning for the engineer to either elevate it to
+**fix-everything** (which re-runs the gate and runs the full ladder to
+convergence) or skip / dismiss it. The full-ladder steps (revise → re-gate →
+regenerate-all → re-review-each) stay intact and run only under fix-everything;
+they are never executed as a scoped one-pass. The invariant: **only
+fix-everything re-runs the gate, and the full ladder is always a deliberate,
+cost-warned choice.**
+
+**At the design gate (Stage 12b) no task specs exist**, so **Fix — spec patch**
+is unavailable and every finding is effectively design-upstream (the only
+artefact to edit is the design itself). There a scoped only-highs / only-lows
+choice surfaces its in-scope findings for elevate-to-fix-everything or skip and
+then clears — no spec-patch pass is possible, and the full ladder runs only
+under fix-everything — so a scoped escape at the design gate fixes nothing
+without elevation.
 
 ## Stage 12b — Design gate loop
 
@@ -413,7 +538,14 @@ for unreadable referenced files. Do NOT halt the stage on an unreadable
 codebase path — an unreadable codebase path is dropped-and-noted, unlike the
 step 0 scriptPath guard and the step 1 section-presence guard, which hard-fail.
 
-**Step 4 — Assemble and pass all nine args (Interface contract #1).** Compute
+**Step 3b — Build `steeringIndex` and run the completeness cross-check.**
+Assemble `steeringIndex` as a preformatted Markdown index string so the
+steering-context checks can read the full text only of plausibly-relevant docs
+instead of the whole bundle. Follow the procedure in *Building the steering
+index* below. The output is either the index string or `null` (the read-all
+degrade trigger).
+
+**Step 4 — Assemble and pass all ten args (Interface contract #1).** Compute
 `round` from disk (see round-number management below), then assemble:
 
 - `gateType`: `"design"`
@@ -426,6 +558,8 @@ step 0 scriptPath guard and the step 1 section-presence guard, which hard-fail.
 - `round`: 1-based, monotonic per `(gateType, artefactSlug)` — disk-derived
 - `priorFindingsPath`: `null` on the first round for this `artefactSlug`;
   otherwise the previous round's findings-file path
+- `steeringIndex`: the Markdown index string from Step 3b, or `null` (the
+  read-all degrade trigger)
 
 ### Invoke the Workflow
 
@@ -440,6 +574,38 @@ notification delivers the compact result.
 A wholesale `Workflow` failure (the call rejects before any agent returns) or
 an unreadable `scriptPath` halts the stage and surfaces it, with **no fallback
 to inline dispatch**.
+
+### Building the steering index
+
+This procedure is shared by the Stage 12b and Stage 14b pre-invocation steps;
+run it identically in both. It produces `steeringIndex` — the tenth
+`review-gate.js` argument.
+
+1. **Read the curated source lists.** Parse the "Standards in this library"
+   bullet lists from `CLAUDE.md` (the `base/`, `languages/`, and `domains/`
+   entries) and, **when the file is present**, from `CLAUDE.local.md` (the
+   `local/` entries). Each bullet has the shape
+   `` `docs/ai/steering/<path>` — <one-line description> ``.
+2. **Assemble the index string.** Emit one
+   `- {path} — {one-line description}` line per curated doc, grouped by folder
+   (`base/`, then `languages/`, then `domains/`, then `local/`). Include the
+   `local/` group only when `CLAUDE.local.md` was present and parseable. This is
+   the value passed as `steeringIndex`.
+3. **Run the completeness cross-check.** List `docs/ai/steering/` **following
+   symlinks** so the symlinked `base/`, `languages/`, and `domains/`
+   subdirectories are included (`local/` is a real directory). Use `fd` / the
+   dedicated tools, never `grep` / `find`. Exclude the non-normative `README.md`
+   index files and `.gitkeep` placeholders. If the listing contains a normative
+   doc that the curated lists omit, **degrade this run to read-all** (pass
+   `steeringIndex: null`) and note the unlisted doc to the engineer
+   (`[steering doc <path> not in the curated lists — degrading this gate to
+   read-all]`).
+4. **Degrade gracefully on source absence / parse failure.** `CLAUDE.local.md`
+   absent (as in a fanned-out consumer repo) → build the index from `CLAUDE.md`
+   alone and omit the `local/` group; raise no error. If **neither** curated
+   list is parseable → pass `steeringIndex: null`, which triggers the read-all
+   degrade path in `review-gate.js` (steering compliance is never silently
+   skipped).
 
 ### Round-number management
 
@@ -483,7 +649,10 @@ Branch on `outcome` (one of `HALT`, `PASS`, `ZERO_FINDINGS_WARNING`,
   before clearing — identical to `NOTICES_ONLY` handling — so a failed check is
   never hidden behind a cleared gate.
 
-- **`ZERO_FINDINGS_WARNING`** — voice `report` (which carries the warning
+- **`ZERO_FINDINGS_WARNING`** — first, **commit this round's findings file per
+  Per-round commit below** (round 1 is the only case, and it always wrote a
+  file), before any voicing or clearing. Then
+  voice `report` (which carries the warning
   string) **and any `notices`** as a single confirm-to-proceed prompt (a
   skipped/failed check is never hidden behind a clean-looking warning), with
   the `stats` footer; on confirmation the gate is cleared. Do not record in
@@ -503,19 +672,42 @@ Branch on `outcome` (one of `HALT`, `PASS`, `ZERO_FINDINGS_WARNING`,
   orchestrator's skip set). Then present ALL surviving findings to the engineer
   at once — **each with its `new` / `persisted-from-round-N` annotation
   preserved** — with `notices` surfaced alongside and `stats` as a one-line
-  footer (checks run/failed, per-severity counts). Disposition every finding
-  per **The disposition protocol** above. No specs exist yet at the design
-  gate, so the **Fix — spec patch** disposition is unavailable here — route to
-  **Fix — full ladder** / **Skip** / **Dismiss** only. The engineer must confirm
-  or override a disposition for every finding before the loop continues. Partial
-  responses are not accepted. The loop is unlimited.
+  footer (checks run/failed, per-severity counts). Then offer the **gate-level
+  choice** over the whole set per **gate-level escape** above — skip /
+  only-highs / only-lows / fix-everything — using `Severity` as the triage axis.
+  The engineer is never required to disposition every finding to make progress,
+  partial responses are accepted, and the loop is not unlimited: only
+  fix-everything re-runs the gate; skip, only-highs, and only-lows each clear it.
 
-  - **Fix — full ladder** (severity floor, or design-upstream override): update
-    the design document (re-dispatch to `design-writer.md`). **If the writer
-    re-dispatch fails, surface the failure and halt the Fix cycle — do not
-    invoke the next round, as there is no revised artefact to review.** On
-    success, **commit the revised design before re-reviewing it** so each
-    reviewed revision is in history before its round runs:
+  **No specs exist yet at the design gate**, so the **Fix — spec patch**
+  disposition is unavailable here and every finding is effectively
+  design-upstream — the only artefact to edit is the design itself. A scoped
+  only-highs / only-lows choice therefore runs no spec-patch pass: it surfaces
+  its in-scope findings for elevate-to-fix-everything or skip and then clears,
+  fixing nothing without elevation. fix-everything routes each finding to
+  **Fix — full ladder** / **Skip** / **Dismiss** (per the per-finding disposition
+  protocol) and re-runs the gate.
+
+  - **Fix — full ladder** (design-upstream finding, or engineer design-upstream
+    flag): update the design document by re-dispatching to `design-writer.md`
+    against a freshly written synthesis path. Write `.tmp/{TICKET}-design-synthesis.md`
+    from the **revised** design content (not a stale copy of the original
+    Stage 2–10 outputs — writing the original outputs would feed the writer stale
+    content and silently undo the engineer-directed revision), pass
+    `synthesis_path` = `.tmp/{TICKET}-design-synthesis.md`, and after the writer
+    returns delete the temp file on BOTH success and failure:
+
+    ```bash
+    mkdir -p .tmp
+    # write .tmp/{TICKET}-design-synthesis.md from the revised design content
+    # dispatch design-writer.md with synthesis_path = .tmp/{TICKET}-design-synthesis.md
+    rm -f .tmp/{TICKET}-design-synthesis.md
+    ```
+
+    **If the writer re-dispatch fails, surface the failure and halt the Fix
+    cycle — do not invoke the next round, as there is no revised artefact to
+    review.** On success, **commit the revised design before re-reviewing it** so
+    each reviewed revision is in history before its round runs:
 
     ```bash
     git add docs/design/{TICKET}-{slug}.md
@@ -531,25 +723,43 @@ Branch on `outcome` (one of `HALT`, `PASS`, `ZERO_FINDINGS_WARNING`,
     engineer's explicit acknowledgement. Append `## Dismissals` if not yet
     present. Any severity level including Critical may be dismissed.
 
-  Once all findings are resolved, skipped, or dismissed: gate is cleared.
+  The gate clears once the engineer's gate-level choice completes: skip,
+  only-highs, and only-lows clear it after their one-shot action; fix-everything
+  re-runs the gate until a later round clears.
 
 **Truncated/absent compact result (recovery).** If the completion notification
 carries the full compact result, use it. If it delivers only a task ID or a
 truncated payload, reconstruct the deterministic findings-file path from the
 args just passed (`docs/ai/reviews/{TICKET}-design-gate-{round:NNN}.md`) and
-check disk: **if the file exists**, treat the round as `FINDINGS`/`PASS`, read
-the findings **and any appended `notices`** from it, and dispose exactly as the
-live payload would (findings → disposition protocol; a fully-dismissed PASS
-that still carries notices → confirm-to-proceed; a clean PASS → silent clear);
-**if it does not exist** (the round was `ZERO_FINDINGS_WARNING` /
-`NOTICES_ONLY` / `HALT`, indistinguishable from disk), surface
-`gate result could not be retrieved — re-run or inspect` and **do not
-auto-clear the gate**. Never treat an unrecoverable result as a pass — fail
-toward human attention.
+check disk. The heuristic keys on **`(findings count, round)`**, not on file
+existence alone — round 1 now always writes a findings file (the
+`ZERO_FINDINGS_WARNING` write), so an empty file is produced by two legitimate
+outcomes and count alone cannot tell them apart:
 
-**Per-round commit.** After each `FINDINGS`/`PASS` round (a round that wrote a
-findings file), commit it immediately — before any engineer-facing disposition,
-voicing, or clear:
+- **File exists with at least one finding** → treat the round as `FINDINGS`,
+  read the findings **and any appended `notices`** and dispose exactly as the
+  live payload would (gate-level escape → per-finding disposition protocol).
+- **File exists but is empty (no findings) and round = 1** → treat as
+  `ZERO_FINDINGS_WARNING`: surface the warning **and any appended `notices`** as
+  a confirm-to-proceed prompt; do not auto-clear silently. This intentionally
+  covers *any* empty round-1 file regardless of how it became empty — both an
+  all-empty round-1 sweep and a round-1 all-*dismissed* sweep (findings present
+  but all dismissal-filtered away) surface as `ZERO_FINDINGS_WARNING`, so the
+  `(count, round)` heuristic and `review-gate.js` agree on the round-1 outcome.
+- **File exists but is empty (no findings) and round ≥ 2** → treat as a
+  converged `PASS` (a fully-dismissed PASS that still carries `notices` →
+  confirm-to-proceed; a clean PASS → silent clear).
+- **File does not exist** (the round was `NOTICES_ONLY` / `HALT`,
+  indistinguishable from disk) → surface
+  `gate result could not be retrieved — re-run or inspect` and **do not
+  auto-clear the gate**.
+
+Never treat an unrecoverable result as a pass — fail toward human attention.
+
+**Per-round commit.** After each `FINDINGS` / `PASS` round and each round-1
+`ZERO_FINDINGS_WARNING` round (every round that wrote a findings file — round 1
+now always writes one, even when all-empty), commit it immediately — before any
+engineer-facing disposition, voicing, or clear:
 
 ```bash
 git add docs/ai/reviews/{TICKET}-*-gate-*.md && git commit -m "{TICKET}: persist design-gate findings round {round}"
@@ -558,7 +768,9 @@ git add docs/ai/reviews/{TICKET}-*-gate-*.md && git commit -m "{TICKET}: persist
 Interpolate `{TICKET}` and `{round}` to the actual values. The
 `docs/ai/reviews/` path prefix is load-bearing — a bare `{TICKET}-*-gate-*.md`
 glob from the repo root matches nothing — and the `-m` flag keeps the commit
-non-interactive. Do NOT defer to Stage 15, so the audit trail survives a
+non-interactive. Committing the round-1 `ZERO_FINDINGS_WARNING` file is the
+audit-trail guarantee: a gate that clears via skip still leaves its findings
+commit in `git log`. Do NOT defer to Stage 15, so the audit trail survives a
 session interrupted mid-gate.
 
 Once the gate is cleared, present the design document to the engineer for sign-off:
@@ -662,7 +874,11 @@ Read `.claude/skills/write-design-doc-max/task-writer.md` in full. Dispatch via 
 tool: sub-agent file content as prompt; the following named fields in the user
 message: `TICKET`, `TASK_NUMBER`, `TASK_NAME`, `TASK_DEPENDENCIES`,
 `OUTPUT_PATH` (the derived file path), `BRANCH` (the derived branch value),
-`DESIGN_CONTENT` (full design document text).
+`DESIGN_PATH` (the committed design document path `docs/design/{TICKET}-{slug}.md`;
+the writer reads the design from it). The design was committed to disk in
+Stage 12, so passing its path keeps each of the N task-writer dispatches from
+recharging the full design text as cache-read on every orchestrator turn. The
+small fields stay inline.
 
 **If `task-writer.md` fails for task N:**
 
@@ -676,7 +892,7 @@ After `task-writer.md` returns, before the Stage 14b reviewer gate, deterministi
 reconcile the two contract fields of the just-written spec against the values you
 dispatched. The dispatched `BRANCH` (canonical for `branch:`, computed in step 4)
 and `TASK_DEPENDENCIES` (canonical for `Depends on:`, computed in step 5) are the
-only source of truth — never `DESIGN_CONTENT`'s `Branch:` line. You hold both
+only source of truth — never the design document's `Branch:` line. You hold both
 values already; do not re-derive either from the design document. This corrects
 drift deterministically; it never halts on value drift, never re-dispatches, and
 never asks the engineer anything. Phase 2 autonomy is preserved. A halt is reserved
@@ -820,7 +1036,14 @@ Do NOT halt the stage on an unreadable codebase path — it is dropped-and-noted
 unlike the step 0 scriptPath guard and the step 1 section-presence guard, which
 hard-fail.
 
-**Step 4 — Assemble and pass all nine args (Interface contract #1).** Compute
+**Step 3b — Build `steeringIndex` and run the completeness cross-check.**
+Assemble `steeringIndex` as a preformatted Markdown index string so the
+steering-context checks can read the full text only of plausibly-relevant docs
+instead of the whole bundle. Follow the procedure in *Building the steering
+index* under Stage 12b — run it identically here. The output is either the
+index string or `null` (the read-all degrade trigger).
+
+**Step 4 — Assemble and pass all ten args (Interface contract #1).** Compute
 `round` from disk (see round-number management below), then assemble:
 
 - `gateType`: `"task"`
@@ -838,6 +1061,8 @@ hard-fail.
 - `round`: 1-based, monotonic per `(gateType, artefactSlug)` — disk-derived
 - `priorFindingsPath`: `null` on the first round for this `artefactSlug`;
   otherwise the previous round's findings-file path
+- `steeringIndex`: the Markdown index string from Step 3b, or `null` (the
+  read-all degrade trigger)
 
 ### Invoke the Workflow
 
@@ -896,7 +1121,10 @@ Branch on `outcome` (one of `HALT`, `PASS`, `ZERO_FINDINGS_WARNING`,
   confirm-to-proceed prompt before clearing — identical to `NOTICES_ONLY`
   handling — so a failed check is never hidden behind a cleared gate.
 
-- **`ZERO_FINDINGS_WARNING`** — voice `report` (which carries the warning
+- **`ZERO_FINDINGS_WARNING`** — first, **commit this round's findings file per
+  Per-round commit below** (round 1 is the only case, and it always wrote a
+  file), before any voicing or clearing. Then
+  voice `report` (which carries the warning
   string) **and any `notices`** as a single confirm-to-proceed prompt (a
   skipped/failed check is never hidden behind a clean-looking warning), with
   the `stats` footer; on confirmation the gate is cleared and you proceed to
@@ -917,17 +1145,50 @@ Branch on `outcome` (one of `HALT`, `PASS`, `ZERO_FINDINGS_WARNING`,
   orchestrator's skip set). Then present ALL surviving findings to the engineer
   at once — **each with its `new` / `persisted-from-round-N` annotation
   preserved** — with `notices` surfaced alongside and `stats` as a one-line
-  footer (checks run/failed, per-severity counts). Disposition every finding per
-  **The disposition protocol** above — compute and voice a recommended
-  disposition for each, then have the engineer confirm or override. The engineer
-  must disposition every finding before the loop continues. The loop is unlimited.
+  footer (checks run/failed, per-severity counts). Then offer the **gate-level
+  choice** over the whole set per **gate-level escape** above — skip /
+  only-highs / only-lows / fix-everything — using `Severity` as the triage axis,
+  computing and voicing a recommended per-finding disposition for each finding
+  within any "fix" choice. The engineer is never required to disposition every
+  finding to make progress, partial responses are accepted, and the loop is not
+  unlimited: only fix-everything re-runs the gate; skip, only-highs, and
+  only-lows each clear it.
 
-  **Fix — full ladder** (severity floor, or design-upstream override). When a
-  finding takes the full ladder:
+  Under a scoped only-highs / only-lows choice, each in-scope **spec-local**
+  finding receives a single **Fix — spec patch** pass and then the gate clears —
+  it does NOT enter the spec-patch loop-until-clean inner loop below. An in-scope
+  **design-upstream** finding is surfaced with its cost warning for elevate (to
+  fix-everything) or skip — its full ladder is never run as a scoped one-pass.
+  fix-everything runs spec-patch to convergence and the full ladder to
+  completion, then re-runs the gate.
+
+  **Fix — full ladder** (design-upstream finding, or engineer design-upstream
+  flag). When a finding takes the full ladder, the mandatory cost warning per
+  *The disposition protocol* must precede it whenever task specs already exist —
+  it regenerates all N specs and re-runs every per-task gate, and spec-patch is
+  offered as the alternative. Then:
   1. Engineer directs revision.
-  2. Re-dispatch to `design-writer.md` with updated synthesis. **If the writer
-     re-dispatch fails, surface the failure and halt the Fix cycle — do not
-     invoke the next round, as there is no revised artefact to review.**
+  2. Re-dispatch to `design-writer.md` with the updated synthesis written to a
+     temp path. Write `.tmp/{TICKET}-design-synthesis.md` from the **revised**
+     design content the engineer directed in step 1 — NOT a stale copy of the
+     original Stage 2–10 outputs, which would feed the writer stale content and
+     silently undo the revision — pass `synthesis_path` =
+     `.tmp/{TICKET}-design-synthesis.md`, and after the writer returns delete the
+     temp file on BOTH success and failure:
+
+     ```bash
+     mkdir -p .tmp
+     # write .tmp/{TICKET}-design-synthesis.md from the revised design content
+     # dispatch design-writer.md with synthesis_path = .tmp/{TICKET}-design-synthesis.md
+     rm -f .tmp/{TICKET}-design-synthesis.md
+     ```
+
+     This temp-file write/delete is authored inside the full-ladder step block
+     (here at step 2), not at the 14b call site, so Stage 14c — which applies
+     these full-ladder steps transitively — inherits it without a separate edit.
+     **If the writer re-dispatch fails, surface the failure and halt the Fix
+     cycle — do not invoke the next round, as there is no revised artefact to
+     review.**
   3. Re-run Stage 12b design gate (full gate loop, not abbreviated).
   4. Once design gate clears, commit the revised design:
      ```bash
@@ -944,8 +1205,8 @@ Branch on `outcome` (one of `HALT`, `PASS`, `ZERO_FINDINGS_WARNING`,
   7. Run per-task reviewer on each regenerated spec — do not re-use prior
      review results.
 
-  **Fix — spec patch** (spec-local finding below the severity floor). When a
-  sub-floor finding is local to this one task spec:
+  **Fix — spec patch** (spec-local finding at any severity, including High or
+  Critical). When a spec-local finding is local to this one task spec:
   1. Patch the single affected task spec only. Do NOT touch, regenerate, or
      rewrite any sibling spec. **If the writer re-dispatch fails, surface the
      failure and halt the Fix cycle — do not invoke the next round, as there is
@@ -953,11 +1214,14 @@ Branch on `outcome` (one of `HALT`, `PASS`, `ZERO_FINDINGS_WARNING`,
   2. Re-review that whole patched spec — a fresh full-sweep round with
      `round + 1` and `priorFindingsPath` set to this round's `findingsPath`
      (re-invoke the gate Workflow on it), not a diff.
-  3. Loop on that one spec until it is clean. The loop is intentionally
-     unbounded, matching the ladder-loop convention; convergence is guaranteed
-     not by an iteration cap but by the always-voice rule — at each re-review
-     the engineer sees any re-surfacing finding and can elevate it to the
-     full ladder, Skip it, or Dismiss it, so the loop cannot silently churn.
+  3. Under **fix-everything**, loop on that one spec until it is clean.
+     Convergence is guaranteed not by an iteration cap but by the always-voice
+     rule — at each re-review the engineer sees any re-surfacing finding and can
+     elevate it to the full ladder, Skip it, or Dismiss it, so the loop cannot
+     silently churn. Under a scoped **only-highs / only-lows** escape this inner
+     loop is relaxed to a **single patch pass**: apply step 1 (patch the affected
+     spec) once for the in-scope spec-local finding and then clear the gate — do
+     not run the step-2 re-review and do not loop.
 
   **Skip**: add to the session-scoped in-memory skip set; do not record on disk.
 
@@ -965,25 +1229,43 @@ Branch on `outcome` (one of `HALT`, `PASS`, `ZERO_FINDINGS_WARNING`,
   severity label, issue summary, `source` = the originating task-spec filename
   (`{TICKET}-TASK-{NN}-{slug}.md`), and explicit engineer acknowledgement.
 
-  Once all findings are resolved, skipped, or dismissed: proceed to next task.
+  The gate clears once the engineer's gate-level choice completes: skip,
+  only-highs, and only-lows clear it and proceed to the next task after their
+  one-shot action; fix-everything re-runs the gate until a later round clears.
 
 **Truncated/absent compact result (recovery).** If the completion notification
 carries the full compact result, use it. If it delivers only a task ID or a
 truncated payload, reconstruct the deterministic findings-file path from the
 args just passed (`docs/ai/reviews/{TICKET}-task-{NN}-gate-{round:NNN}.md`) and
-check disk: **if the file exists**, treat the round as `FINDINGS`/`PASS`, read
-the findings **and any appended `notices`** from it, and dispose exactly as the
-live payload would (findings → disposition protocol; a fully-dismissed PASS
-that still carries notices → confirm-to-proceed; a clean PASS → silent clear);
-**if it does not exist** (the round was `ZERO_FINDINGS_WARNING` /
-`NOTICES_ONLY` / `HALT`, indistinguishable from disk), surface
-`gate result could not be retrieved — re-run or inspect` and **do not
-auto-clear the gate**. Never treat an unrecoverable result as a pass — fail
-toward human attention.
+check disk. The heuristic keys on **`(findings count, round)`**, not on file
+existence alone — round 1 now always writes a findings file (the
+`ZERO_FINDINGS_WARNING` write), so an empty file is produced by two legitimate
+outcomes and count alone cannot tell them apart:
 
-**Per-round commit.** After each `FINDINGS`/`PASS` round (a round that wrote a
-findings file), commit it immediately — before any engineer-facing disposition,
-voicing, or clear:
+- **File exists with at least one finding** → treat the round as `FINDINGS`,
+  read the findings **and any appended `notices`** and dispose exactly as the
+  live payload would (gate-level escape → per-finding disposition protocol).
+- **File exists but is empty (no findings) and round = 1** → treat as
+  `ZERO_FINDINGS_WARNING`: surface the warning **and any appended `notices`** as
+  a confirm-to-proceed prompt; do not auto-clear silently. This intentionally
+  covers *any* empty round-1 file regardless of how it became empty — both an
+  all-empty round-1 sweep and a round-1 all-*dismissed* sweep surface as
+  `ZERO_FINDINGS_WARNING`, so the `(count, round)` heuristic and
+  `review-gate.js` agree on the round-1 outcome.
+- **File exists but is empty (no findings) and round ≥ 2** → treat as a
+  converged `PASS` (a fully-dismissed PASS that still carries `notices` →
+  confirm-to-proceed; a clean PASS → silent clear).
+- **File does not exist** (the round was `NOTICES_ONLY` / `HALT`,
+  indistinguishable from disk) → surface
+  `gate result could not be retrieved — re-run or inspect` and **do not
+  auto-clear the gate**.
+
+Never treat an unrecoverable result as a pass — fail toward human attention.
+
+**Per-round commit.** After each `FINDINGS` / `PASS` round and each round-1
+`ZERO_FINDINGS_WARNING` round (every round that wrote a findings file — round 1
+now always writes one, even when all-empty), commit it immediately — before any
+engineer-facing disposition, voicing, or clear:
 
 ```bash
 git add docs/ai/reviews/{TICKET}-*-gate-*.md && git commit -m "{TICKET}: persist task-{NN}-gate findings round {round}"
@@ -992,7 +1274,9 @@ git add docs/ai/reviews/{TICKET}-*-gate-*.md && git commit -m "{TICKET}: persist
 Interpolate `{TICKET}`, `{NN}`, and `{round}` to the actual values. The
 `docs/ai/reviews/` path prefix is load-bearing — a bare `{TICKET}-*-gate-*.md`
 glob from the repo root matches nothing — and the `-m` flag keeps the commit
-non-interactive. Do NOT defer to Stage 15, so the audit trail survives a
+non-interactive. Committing the round-1 `ZERO_FINDINGS_WARNING` file is the
+audit-trail guarantee: a gate that clears via skip still leaves its findings
+commit in `git log`. Do NOT defer to Stage 15, so the audit trail survives a
 session interrupted mid-gate.
 
 ---
@@ -1016,25 +1300,38 @@ re-run. If the second run also fails: halt and surface the error.
 
 - `PASS`: proceed to Stage 15.
 
-- Findings report: present ALL findings to engineer at once. Disposition every
-  finding per **The disposition protocol** above — the same routing as the
-  other gates, referencing the one shared subsection.
+- Findings report: present ALL findings to engineer at once, then offer the
+  **gate-level choice** over the whole set per **gate-level escape** above —
+  skip / only-highs / only-lows / fix-everything — using `Severity` as the
+  triage axis. Per-finding disposition (per **The disposition protocol** above —
+  the same routing as the other gates) remains available within any "fix"
+  choice. The engineer is never required to disposition every finding to make
+  progress, partial responses are accepted, and the loop is not unlimited: only
+  fix-everything re-runs the gate; skip, only-highs, and only-lows each clear it.
+  Under a scoped only-highs / only-lows choice each in-scope spec-local finding
+  gets a single spec-patch pass and the gate clears; an in-scope design-upstream
+  finding is surfaced with its cost warning for elevate-to-fix-everything or
+  skip — its full ladder is never run as a scoped one-pass.
 
-  - **Fix — full ladder** (severity floor, or design-upstream override): apply
+  - **Fix — full ladder** (design-upstream finding, or engineer design-upstream
+    flag; preceded by the mandatory cost warning when specs exist): apply
     the Stage 14b full-ladder steps 1–7 to the finding. After regeneration
-    completes, re-run Stage 14c on the regenerated set.
-  - **Fix — spec patch** (spec-local finding below the severity floor): patch
-    the single affected task spec, full re-review of that whole spec, loop
-    until clean; siblings untouched (Stage 14b spec-patch steps). Then re-run
-    Stage 14c.
+    completes, re-run Stage 14c on the regenerated set. Reachable only via
+    fix-everything (or surfaced for elevate / skip under a scoped escape).
+  - **Fix — spec patch** (spec-local finding at any severity, including High or
+    Critical): patch the single affected task spec; siblings untouched (Stage 14b
+    spec-patch steps). Under **fix-everything**, full re-review of that whole spec
+    and loop until clean, then re-run Stage 14c. Under a scoped **only-highs /
+    only-lows** escape, a single patch pass with no re-review loop, then clear.
   - **Skip**: add to the session-scoped in-memory skip set; do not record on
     disk.
   - **Dismiss**: append to the design document's `## Dismissals` section with
     severity, issue summary, `source` = `sync-check`, and explicit engineer
     acknowledgement.
 
-  Loop is unlimited. Once all findings are resolved, skipped, or dismissed:
-  proceed to Stage 15.
+  The gate clears once the engineer's gate-level choice completes — skip,
+  only-highs, and only-lows clear it after their one-shot action; only
+  fix-everything re-runs Stage 14c. On a cleared gate, proceed to Stage 15.
 
 ---
 
@@ -1052,6 +1349,7 @@ Then invoke the `create-pr` skill to open a PR for the design branch. Pass:
 - `ticket`: the JIRA key
 - `branch`: the design branch name
 - `steering_doc_path`: the design document path
+- `labels`: `ai-design`
 
 Do not pass `base` — the design branch PR targets the repo default branch.
 
@@ -1088,21 +1386,28 @@ Report to the engineer:
 - **Phase 1 is interactive.** One section at a time. Wait for engineer input.
   Do not produce the Design Document in one pass.
 - **Read the codebase actively.** Use Bash and Read throughout Phase 1.
-- **Gate ordering is a hard constraint.** Design gate must clear before
+- **Gate ordering is a hard constraint.** Design gate must run before
   sign-off. Sign-off before task generation. Sync-check before push. No
-  exceptions. A gate clears once every finding is dispositioned per **The
-  disposition protocol** — fixed (full ladder or spec patch), skipped, or
-  dismissed.
+  exceptions. The gates are **advisory** (ADR 014): a gate clears once the
+  engineer's **gate-level choice** completes (**gate-level escape**) — skip,
+  only-highs, and only-lows clear it after a one-shot action; only fix-everything
+  re-runs the gate to convergence. No engineer is ever forced to disposition
+  every finding to make progress, partial responses are accepted, and the loop
+  is not unlimited. Running the gate and writing-and-committing its round-1
+  findings file is mandatory; actioning the findings is the engineer's choice.
 - **All three gates route through one disposition protocol.** Stages 12b, 14b,
   and 14c reference the single **The disposition protocol** subsection for the
   routing rules, carrying only their stage-specific deltas rather than restating
-  the routing rules themselves. The severity floor routes `High`-and-above (or
-  design-upstream-flagged) findings to the full ladder; spec-local sub-floor
-  findings take the spec-patch path (unavailable at the design gate, which has
-  no specs).
+  the routing rules themselves. The routing key is design-upstream-ness, not
+  severity (ADR 014): a design-upstream finding (or one the engineer flags
+  design-upstream) routes to the full ladder, preceded by the mandatory cost
+  warning when specs exist; a spec-local finding at any severity — including High
+  or Critical — takes the spec-patch path (unavailable at the design gate, which
+  has no specs). Severity is advisory and the gate-escape triage axis only.
+  Ambiguity defaults to spec-local.
 - **Always voice, never auto-apply.** Every finding is presented with a
   recommended disposition; nothing is fixed, skipped, or dismissed without the
-  engineer confirming or overriding. The severity floor produces a
+  engineer confirming or overriding. The design-upstream routing key produces a
   recommendation, not an action.
 - **`## Dismissals` is for conscious acceptance only.** A Dismiss record means
   the engineer has explicitly accepted a real gap; it carries severity, issue

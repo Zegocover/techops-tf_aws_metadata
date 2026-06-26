@@ -186,6 +186,12 @@ EXISTING_PR="$(gh pr list --head "$CURRENT_BRANCH" --state open --json url -q '.
 
 if [[ -n "$EXISTING_PR" ]]; then
   echo "Pushed to existing PR: $EXISTING_PR"
+  # Apply the requirements stage label. Pass the PR URL we already hold so
+  # pr-label.sh skips a redundant branch->PR lookup. pr-label.sh always
+  # exits 0; the trailing `|| true` decouples this script's `set -euo
+  # pipefail` from the child's exit code so a label outcome can never abort
+  # req-pr.sh.
+  "$(dirname "$0")/pr-label.sh" "$EXISTING_PR" ai-requirements || true
 else
   DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')"
 
@@ -195,4 +201,8 @@ else
     --body-file "$BODY_FILE")"
 
   echo "$PR_URL"
+  # Apply the requirements stage label, passing the just-created PR URL we
+  # already hold so pr-label.sh skips a redundant branch->PR lookup (see
+  # note above).
+  "$(dirname "$0")/pr-label.sh" "$PR_URL" ai-requirements || true
 fi

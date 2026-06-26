@@ -25,6 +25,7 @@ report which inputs are missing. The optional `base` input may be omitted.
 | `branch`           | yes      | Branch to open the PR from, e.g. `AIDEV-25_create_pr_automatically` |
 | `task_spec_path`   | yes      | Relative path to the task spec, e.g. `docs/tasks/AIDEV-25-TASK-01-create-pr-automatically.md` |
 | `base`             | no       | Branch to target for the PR; if absent, defaults to the repo default branch |
+| `labels`           | no       | Comma-separated label names to apply to the opened PR, e.g. `ai-implementation` or `ai-design,ai-implementation`. When absent, no label step runs. |
 
 ---
 
@@ -222,7 +223,31 @@ Do not embed credentials, tokens, or environment variables in the command.
 
 ## Stage 7 — Handle the result
 
-**On success** — report to the caller:
+**On success** — first apply labels (if any), then report to the caller.
+
+If the `labels` input is present, split it on commas into individual label
+names and apply them to the PR via the shared label script. Pass the PR URL
+captured from `gh pr create` — the skill already holds it, so passing it avoids
+a branch->PR re-resolution. This step runs **only on this success branch** —
+never on the failure branch below — and is **non-gating**: a label outcome must
+never fail or stop `create-pr`. `pr-label.sh` is failure-tolerant and always
+exits `0`.
+
+```bash
+.claude/scripts/pr-label.sh "{pr_url}" {space-separated label names}
+```
+
+For example, `labels: ai-design,ai-implementation` becomes:
+
+```bash
+.claude/scripts/pr-label.sh "{pr_url}" ai-design ai-implementation
+```
+
+If the `labels` input is absent, skip this step entirely — run no label
+command. Behaviour is then byte-for-byte unchanged from a PR opened without
+labels.
+
+Then report to the caller:
 
 - PR URL (from `gh pr create` output)
 - Title used
@@ -260,3 +285,8 @@ Covered failure cases include (but are not limited to):
   environment; do not embed tokens or environment variable references.
 - **On gh failure, stop.** Do not swallow errors or proceed to any downstream
   stage.
+- **The label step is non-gating and success-branch only.** When `labels` is
+  present, apply it via `.claude/scripts/pr-label.sh` only on Stage 7's success
+  branch, after `gh pr create` has succeeded — never on the failure branch. A
+  label outcome must never fail or stop `create-pr`; `pr-label.sh` always exits
+  `0`. When `labels` is absent, run no label command — behaviour is unchanged.

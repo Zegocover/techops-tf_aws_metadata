@@ -77,6 +77,11 @@ if re.search(r'git\s+stash\s+clear', cmd):
 if re.search(r'gh\s+pr\s+merge', cmd):
     sys.exit(1)
 
+# git rebase --exec / -x runs an arbitrary command per replayed commit —
+# an un-prompted code-execution path even when 'git rebase' is allow-listed
+if re.search(r'git\s+rebase\b.*(--exec\b|\s-[a-zA-Z]*x\b)', cmd):
+    sys.exit(1)
+
 sys.exit(0)
 " "$CMD" 2>/dev/null || block
 

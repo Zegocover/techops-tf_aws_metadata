@@ -1,11 +1,34 @@
 ---
-version: 1.3
-last_reviewed: 2026-05-11
+version: 1.4
+last_reviewed: 2026-06-05
 ---
 
 # Python Standards
 
 Structural and architectural conventions for Python — how business logic is organised, dependencies are wired, types are annotated, and interfaces are expressed; the governing philosophy is functional core, imperative shell: pure functions for business logic, I/O at the edges. Apply these rules to any Python file you write or modify. Formatting, import ordering, and type checking are enforced mechanically by ruff and mypy and are not covered here; testing tooling (pytest, pytest-asyncio, coverage.py) is language-specific and is covered here. Logging conventions are owned by `docs/ai/steering/base/logging.md`; observability and tracing conventions are owned by `docs/ai/steering/base/observability.md`; testing principles and structure are owned by `docs/ai/steering/base/testing.md`.
+
+## Applicability
+
+The rules below divide into an **intrinsic core** that describes the Python code itself — and so applies to any Python file the diff touches, regardless of the repo's wider structure — and **project-structure and tooling rules** that only have meaning once the repo has adopted the scaffolding they govern. Gate the latter by surface presence, the same way the base standards (`logging.md`, `environment.md`, `error-handling.md`) gate their surface-specific rules.
+
+**Intrinsic core — applies to any Python the diff touches:**
+
+- **Functional core, imperative shell** (Rule 1) and the **async-for-I/O** boundary (Rule 12).
+- **Composition root** wiring (Rule 2) and **modules over all-static classes** (Rule 3).
+- **Type annotations everywhere**, including no silenced mypy outside the two permitted cases (Rule 4), **`Any` requires an inline comment** (Rule 11), and **imports at the top** (Rule 7).
+- **Docstrings for public interfaces** (Rule 5) and **TODO with Jira reference** (Rule 6).
+- **PEP 8 naming** (Rule 8) and **no magic strings or numbers** (Rule 13).
+- **Protocols sparingly** (Rule 9) and **Pydantic for domain data and boundaries** (Rule 10).
+- The **single config entry point principle** — the part of the `BaseSettings` rules (Rules 23–26) that says environment reads must be routed through one place rather than scattered as `os.getenv()`/`os.environ[]` calls through business logic. This principle is intrinsic: a new module scattering `os.getenv()` calls is flaggable wherever it appears, independently of whether the repo already has a config entry point.
+
+**Project-structure and tooling rules — bind only where the surface already exists:**
+
+- The **`tests/unit/` vs `tests/integration/` split** (Rule 15) — binds only where the repo already maintains that split; adding one test file to a repo with no pre-existing split is not a violation.
+- The **95% coverage floor and config-level coverage exclusions** (Rules 18, 19) — bind only where a `pyproject.toml` coverage target already exists.
+- The **pytest / pytest-asyncio / LocalStack / pytest-dotenv tooling and mocking rules** (Rules 14, 16, 17, 20, 21, 22, 27) — bind only where that test scaffolding already exists.
+- The specific **Pydantic `BaseSettings` plumbing** (Rules 23–26) — the concrete `BaseSettings` class, `env_nested_delimiter`, `secrets_dir`, and `env_file` mechanics — binds only where a config entry point already exists. This is distinct from the single-config-entry-point *principle* above, which is intrinsic: where the repo has no `BaseSettings` entry point, do not demand that a lone module introduce one, but a module scattering `os.getenv()` calls is still flaggable against Group B's universal config core.
+
+Where the surface is absent, do not raise a finding demanding that a lone module introduce it — note it as an advisory at most. A `.py` file in the diff does not by itself make the repo a Python service that ought to have this scaffolding; the decisive test is the repo's existing structure, not the diff's.
 
 ## Rules at a Glance
 
