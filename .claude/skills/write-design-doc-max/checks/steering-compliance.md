@@ -17,11 +17,11 @@ If only a design document is present (no task spec):
 
 - `requirements_source`: full text of the requirements source (context only)
 - Primary document: full text of the document under review (including `## Dismissals` if present)
-- All `docs/ai/steering/` files passed as context — read every one before assessing
+- A curated index of the steering docs (one `- {path} — {one-line description}` line per doc). Read the full text only of the docs whose description is plausibly relevant to the primary document; when uncertain whether a doc is relevant, read it. If the read-all degrade is in effect (no index was provided), read every `docs/ai/steering/` file instead.
 
 ## Checks
 
-For each steering doc passed as context:
+Select the steering docs whose one-line description is plausibly relevant to the primary document (read when uncertain), then for each selected steering doc:
 - Read it in full.
 - For each rule or convention it states: does the primary document propose anything that contradicts it?
 - A contradiction is a statement in the primary document that, if acted on, would violate the steering rule.

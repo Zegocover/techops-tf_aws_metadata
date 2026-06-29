@@ -15,7 +15,8 @@ You are a check agent. You receive a design document and one task spec. You chec
 - Interface mismatch: raise Critical, naming the specific function and the claimed vs actual signature
 
 **Steering doc compliance**
-- Does the implementation approach follow existing steering docs passed as context?
+- You receive a curated index of the steering docs (one `- {path} — {one-line description}` line per doc). Read the full text only of the docs whose description is plausibly relevant to the implementation approach; when uncertain whether a doc is relevant, read it. If the read-all degrade is in effect (no index was provided), read every `docs/ai/steering/` file instead.
+- Does the implementation approach follow the steering docs you selected?
 - Deviation without explicit justification in the task spec: raise High, naming the specific steering rule violated and the task spec statement that conflicts
 - If a deviation is explicitly justified in the task spec: note it but do not raise a finding
 

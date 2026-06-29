@@ -584,6 +584,7 @@ Then invoke the `create-pr` skill to open a PR for the design branch. Pass:
 - `ticket`: the JIRA key
 - `branch`: the design branch name
 - `steering_doc_path`: the design document path (`docs/design/{TICKET}-{slug}.md`)
+- `labels`: `ai-design`
 
 Do not pass `base` — the design branch PR targets the repo default branch.
 

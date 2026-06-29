@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_reviewed: 2026-06-02
+version: "1.2"
+last_reviewed: 2026-06-05
 ---
 
 # Code Review
@@ -13,7 +13,7 @@ This document is what the `review` skill checks against. An agent running a revi
 
 ## Groups
 
-Checks are divided into eight groups, each run by a dedicated sub-agent in parallel. Groups E, F, and G are conditional — only spawn them if the relevant conditions are met.
+Checks are divided into eleven groups, each run by a dedicated sub-agent in parallel. Groups E, F, G, I, and J are conditional — only spawn them if the relevant conditions are met.
 
 | Group | Name | Standard file(s) | Conditional? |
 |---|---|---|---|
@@ -25,6 +25,9 @@ Checks are divided into eight groups, each run by a dedicated sub-agent in paral
 | F | Python | `docs/ai/steering/languages/python.md` | Only if `.py` files in diff |
 | G | Protobuf Converters | `docs/ai/steering/domains/protobuf-converters.md` | Only if `.proto` or `converter` files in diff |
 | H | Error Handling, File Organisation, Resilience & Spelling | `docs/ai/steering/base/error-handling.md`, `docs/ai/steering/base/file-organisation.md`, `docs/ai/steering/base/resilience.md`, `docs/ai/steering/base/spelling.md` | Never |
+| I | HCL/Terraform | `docs/ai/steering/languages/hcl.md` | Only if `.tf` or `.tfvars` files in diff |
+| J | Scala | `docs/ai/steering/languages/scala.md` | Only if `.scala` files in diff |
+| L | Financial Integrity | (delegates to `audit-financial-integrity` skill) | Never |
 
 ---
 
@@ -93,6 +96,8 @@ Only run if the diff contains `.py` files.
 
 Load and apply all rules from `docs/ai/steering/languages/python.md`. Check every new or modified Python file.
 
+**Honour `python.md`'s Applicability section**, the same way Groups B and H defer to each file's: it splits the standard into an intrinsic core that applies to any Python the diff touches and project-structure/tooling rules that bind only where the repo has already adopted the scaffolding (the `tests/unit|integration` split, the `pyproject.toml` coverage floor, the `BaseSettings` plumbing). The decisive test is the **repo's existing structure, not the diff's** — where the surface is absent, do not demand that a lone module introduce it; note it as an advisory at most. Note in particular that the single-config-entry-point *principle* is intrinsic: a module scattering `os.getenv()` calls is flaggable even where the repo has no `BaseSettings` entry point.
+
 ---
 
 ## Group G — Protobuf Converters (conditional)
@@ -108,6 +113,39 @@ Load and apply all rules from `docs/ai/steering/domains/protobuf-converters.md`.
 Load and apply all rules from `docs/ai/steering/base/error-handling.md`, `docs/ai/steering/base/file-organisation.md`, `docs/ai/steering/base/resilience.md`, and `docs/ai/steering/base/spelling.md`.
 
 Check every new or modified catch/exception block, error type definition, and error-handling flow against the error-handling rules. Check file sizes and directory structure against the file-organisation rules. Check retry logic, timeout configuration, backoff implementation, and idempotency patterns against the resilience rules. Check all human-readable text (comments, docstrings, log messages, error messages) against the spelling rules.
+
+---
+
+## Group I — HCL/Terraform (conditional)
+
+Only run if the diff contains `.tf` or `.tfvars` files.
+
+Load and apply all rules from `docs/ai/steering/languages/hcl.md`. Check every new or modified Terraform file.
+
+---
+
+## Group J — Scala (conditional)
+
+Only run if the diff contains `.scala` files.
+
+Load and apply all rules from `docs/ai/steering/languages/scala.md`. Check every new or modified Scala file.
+
+---
+
+## Group L — Financial Integrity
+
+This group delegates to the `audit-financial-integrity` skill. It is the behaviour-and-integrity check that the operating model treats as a mandatory part of every review — its job is to surface code that looks designed to do something it should not be doing, distinct from the security vulnerabilities Group D covers.
+
+In scope for this group (drawn from the skill's threat catalogues): fund skimming and payment diversion; ledger and balance-correctness drift; refund / void / unapplied-cash abuse; AML / sanctions / KYC control weakening; auth and privilege-escalation backdoors; reverse shells and unintended outbound exfiltration channels; hardcoded wallet addresses and private keys; disabled or weakened audit logging; and malicious or suspicious dependency additions.
+
+The sub-agent must invoke the `audit-financial-integrity` skill against the current diff and translate its output into the standard per-check tagged-line block and YAML findings list defined under `## Output format` below. The skill itself never approves a PR — it is advise-only by design (per its own `## Rules` section). For this group's findings:
+
+- Critical or high-severity findings from the audit map to `[blocker]` — they must be surfaced to a human reviewer before merge.
+- Medium-severity findings map to `[error]` (major).
+- Low-severity findings map to `[warning]` (minor).
+- A clean audit emits one `[pass]` line summarising the verdict.
+
+Findings from this group are advisory toward the human reviewer who adjudicates the gate — they do not commit the reviewer to a block-or-approve decision; they ensure the suspicious pattern is visible.
 
 ---
 

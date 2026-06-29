@@ -23,17 +23,9 @@ argument_hint: "Optional — describe expected argument if the skill accepts one
 ---
 ```
 
-## Skills in this library
+## Skill inventory and ordering
 
-| Skill | Purpose | Model | Status |
-|---|---|---|---|
-| `init-claude.md` | Bootstrap a repo — absorbs existing AI configs, generates CLAUDE.md and local rules ([AIDEV-1](https://zegons.atlassian.net/browse/AIDEV-1)) | Opus | P0 |
-| `review-code.md` | Parallel multi-agent code review against standards + steering doc | Opus | P1 |
-| `create-pr/SKILL.md` | Open a PR after implement PASS — derives title from steering doc, builds Background + Changes + Jira Ticket/s from the diff ([AIDEV-25](https://zegons.atlassian.net/browse/AIDEV-25)) | Sonnet | P1 |
-| `write-requirements.md` | PM-facing interview to certainty — produces structured Given/When/Then requirements document | Opus | P1 |
-| `write-steering-doc.md` | Developer-facing interview to certainty — produces steering document with impact assessment | Opus | P1 |
-| `fix-pr-comments.md` | Feed PR review comments back through the code → review loop | Sonnet | P1 |
-| `fix-buildkite/SKILL.md` | Diagnose and remediate Buildkite CI failures via MCP — triage, retry flaky tests, fix code errors, commit and push | Opus | P1 |
-| `write-skill/SKILL.md` | Staged orchestrator: interview, TDD cycle (RED/GREEN/REFACTOR with sub-agents), validation — produces tested skill files | Opus | P1 |
-| `extend-claude-standards/SKILL.md` | Gap analysis and engineer interview for `## Repository context` in `CLAUDE.local.md` — classifies 10 topics, interviews for thin/absent, merges answers ([AIDEV-78](https://zegons.atlassian.net/browse/AIDEV-78)) | Opus | P1 |
-| `write-standard/SKILL.md` | Interview-driven: creates a new standards file or extends an existing one. Analyses sources, detects conflicts, validates structure, commits | Opus | P1 |
+This README does not list the installed skills — a hand-maintained inventory here has no forcing function keeping it in step with the skills on disk, and it drifts.
+
+- For the **authoritative inventory** of skills, read the "Skills available in this repo" section of `CLAUDE.md`.
+- For the **ordering, skip rules, and off-path utilities** — which skill to use when, and how the skills compose into the development pipeline — read `docs/ai/steering/base/skill-pipeline.md`.

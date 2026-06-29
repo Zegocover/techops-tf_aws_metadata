@@ -462,6 +462,67 @@ and re-run Stage 12a validation before proceeding.
 
 ---
 
+## Stage 12c — Pipeline narrative maintenance
+
+Autonomous — no engineer questions. Runs after the skill files are written.
+
+The development pipeline narrative lives in
+`docs/ai/steering/base/skill-pipeline.md` (the requirements-to-merged-PR
+ordering, skip rules, and off-path utilities). When a new skill enters that
+flow, the narrative must be updated so it does not drift.
+
+**Authoring-repo only.** Reconcile the narrative ONLY when running in this
+authoring standards-library repo, which owns the skill set and the doc. This
+repo is identified by the physical `standards/` source directory backing the
+`docs/ai/steering/base` symlink:
+
+```bash
+test -d standards/base && echo "AUTHORING" || echo "CONSUMER"
+```
+
+- **If CONSUMER** (no `standards/base/` source directory): skip this stage. In a
+  consumer repo `/write-skill` adds the team's own extension skills, which are
+  expected to live outside the fanned-out narrative. `skill-pipeline.md` is a
+  fanned-out standards file: editing it would break the single-source-of-truth
+  intent and the edit would be overwritten by the next fan-out bump. Record a
+  note in the Stage 14 report — "Consumer repo; skill-pipeline.md not updated
+  (owned by the authoring standards library)" — and do NOT fail the skill.
+- **If AUTHORING**, continue with the reconciliation below.
+
+First, check whether the pipeline doc is present:
+
+```bash
+ls docs/ai/steering/base/skill-pipeline.md 2>/dev/null && echo "PRESENT" || echo "ABSENT"
+```
+
+- **If ABSENT** (a repo without the standards bundle): skip this stage. Record
+  a note in the Stage 14 report — "Pipeline narrative absent; skill-pipeline.md
+  not updated" — and do NOT fail the skill.
+- **If PRESENT**: decide whether the new skill participates in the development
+  pipeline flow.
+  - **Participation test:** does the skill sit on the happy path (a step a
+    feature runs through from requirements to a merged PR), or is it conditional
+    remediation invoked after a PR (CI failure, review threads)? If yes, it
+    participates.
+  - **If it participates**, edit `docs/ai/steering/base/skill-pipeline.md` to
+    include the new skill in the appropriate place — the happy-path sequence,
+    the conditional-remediation list, or a posture note — using the skill's
+    confirmed name and a one-line purpose from the earlier stages.
+  - **If it does not participate** (an off-path utility), either add it to the
+    off-path utilities section or leave the doc untouched, per the same test —
+    do NOT force an off-path skill into the happy-path sequence.
+
+  Stage the edit via the physical source path, since git cannot stage through
+  the symlink in this repo:
+
+```bash
+# In zego-ai-standards the steering file lives at standards/base/ — git cannot stage through the docs/ai/steering/base symlink.
+# In a consumer repo (docs/ai/steering/base is a real directory) stage docs/ai/steering/base/skill-pipeline.md instead.
+git add standards/base/skill-pipeline.md
+```
+
+---
+
 ## Stage 13 — Commit
 
 Stage and commit all files:
@@ -509,6 +570,9 @@ Report to the engineer:
 > **Files written:**
 > - `.claude/skills/{name}/SKILL.md`
 > - {any companion files}
+> {If Stage 12c updated the pipeline narrative:
+> "- `docs/ai/steering/base/skill-pipeline.md` (pipeline narrative updated for {name})"}
+> {If Stage 12c skipped: "Pipeline narrative absent; skill-pipeline.md not updated."}
 
 ---
 
@@ -550,5 +614,11 @@ Report to the engineer:
   obtains engineer approval. If a purpose is too vague, halt and ask — never
   commit skeleton/TODO files.
 - **Do not modify existing skills.** This skill produces new skills only.
+- **Maintain the pipeline narrative.** In Stage 12c, when the new skill
+  participates in the development pipeline flow, update
+  `docs/ai/steering/base/skill-pipeline.md` to include it; if it is an off-path
+  utility, leave the happy path untouched. If the pipeline doc is absent (a
+  repo without the standards bundle), skip the step with a note in the report —
+  never fail the skill over a missing pipeline doc.
 - **Token cost transparency.** The TDD cycle costs ~50k–100k additional
   input tokens per sub-agent run. Note this in the skill output.

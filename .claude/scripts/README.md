@@ -14,6 +14,7 @@ Scripts are installed into `.claude/scripts/` in consumer repos. Skills referenc
 | `pr-resolve.sh` | `.claude/scripts/pr-resolve.sh <thread-id> <pr-number>` | Marks a PR review thread resolved via GraphQL mutation. Takes the `thread_id` node ID returned by `pr-comments.sh`. Cross-checks the PR number against the current branch's open PR; exits 3 on mismatch. |
 | `req-branch.sh` | `.claude/scripts/req-branch.sh <ticket> <feature-slug>` | Creates or switches to the requirements branch for a ticket. Constructs branch name `{ticket}_{feature-slug}`. If the branch exists locally, switches to it; if on remote, tracks and switches; otherwise creates from origin's default branch. Refuses to switch with uncommitted changes. |
 | `req-pr.sh` | `.claude/scripts/req-pr.sh <ticket> <requirements-file> <body-file> <commit-msg-file>` | Commits the requirements package, pushes the current branch, and opens a PR (or reports the existing PR if one is already open). Requirements file must be under `docs/requirements/`. Exit 2 on validation failure. |
+| `rebase-push.sh` | `.claude/scripts/rebase-push.sh <branch>` | Updates a rebased branch on origin with `--force-with-lease` (used by `fix-merge-conflict`). Hardcodes the push shape so a bare `--force` cannot be substituted; refuses protected branches (`main`, `master`, `production`, `staging`, `release/*`); cross-checks the arg against the current branch. Exit 2 on invalid/protected branch, exit 3 on branch mismatch. Intentionally **not** in the `settings.json` allow-list, so every force-push prompts. |
 
 ## `_replies/`
 
@@ -31,7 +32,7 @@ Stop and surface this block to the user. Do not attempt to rephrase or work arou
 
 | Script | Pattern scope |
 | --- | --- |
-| `git-safety.sh` | Unconditional: force push (`--force`, `-f`); push to protected branches (`main`, `master`, `production`, `staging`, `release/*`); `git reset --hard`; `git clean -f*`; `git checkout -- .`; `git restore .`; `git branch -D`; `git stash drop`; `git stash clear`; `gh pr merge`. Protected-branch only: `--force-with-lease`, `--force-if-includes`. |
+| `git-safety.sh` | Unconditional: force push (`--force`, `-f`); push to protected branches (`main`, `master`, `production`, `staging`, `release/*`); `git reset --hard`; `git clean -f*`; `git checkout -- .`; `git restore .`; `git branch -D`; `git stash drop`; `git stash clear`; `gh pr merge`; `git rebase --exec`/`-x` (arbitrary command execution per replayed commit). Protected-branch only: `--force-with-lease`, `--force-if-includes`. |
 | `filesystem-safety.sh` | `rm -rf` and `rm -fr` (flags in any order or combination) |
 | `database-safety.sh` | `DROP TABLE`; `DROP DATABASE`; `TRUNCATE TABLE`; `TRUNCATE <identifier>` (all case-insensitive) |
 

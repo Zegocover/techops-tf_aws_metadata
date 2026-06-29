@@ -1,3 +1,7 @@
+---
+ci-test-command: "terraform fmt -check -recursive"
+---
+
 # CLAUDE.local.md
 
 Team-local context for AI agents working in this repository. Captures

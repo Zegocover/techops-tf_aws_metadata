@@ -4,19 +4,22 @@ You are a sub-agent invoked by `.claude/skills/write-design-doc-max/SKILL.md` to
 
 ## Inputs (received from SKILL.md)
 
-- `feature_name`: the human-readable feature name (used as the `# Design:` title and as the source for slug derivation)
-- `approach`: confirmed approach text (Stage 2 output)
-- `components`: confirmed components list — existing (modified) and new (created) with descriptions (Stage 3 output)
-- `interface_contracts`: confirmed interface contracts for all new or modified interfaces (Stage 4 output); "No new or modified interfaces" if none
-- `task_breakdown`: confirmed task breakdown — ordered list of tasks with names, numbers, and dependencies (Stage 7 output)
-- `test_strategy`: confirmed test strategy — integration test owner, E2E approach, cross-task constraints (Stage 8 output)
-- `risks_and_constraints`: confirmed risks and constraints — each risk with why it matters and mitigation (Stage 9 output)
-- `adr_references`: confirmed ADR references — existing ADRs that constrain the design, plus any new ADRs to create (Stage 10 output); "No ADR references" if none
-- `requirements_source_path`: path to the requirements source file (e.g. `docs/requirements/AIDEV-82-foo.md` or JIRA key)
-- `branch`: branch name established in SKILL.md Stage 1
-- `ticket`: JIRA ticket key (e.g. `AIDEV-82`)
-- `engineer`: engineer name
-- `date`: ISO 8601 date
+- `synthesis_path`: path to a synthesis file (`.tmp/{TICKET}-design-synthesis.md`) that holds every field this writer needs as labelled Markdown sections. Read it first — it is your complete brief. SKILL.md writes it before dispatching and deletes it after this writer returns; it carries:
+  - `feature_name`: the human-readable feature name (used as the `# Design:` title and as the source for slug derivation)
+  - `approach`: confirmed approach text (Stage 2 output)
+  - `components`: confirmed components list — existing (modified) and new (created) with descriptions (Stage 3 output)
+  - `interface_contracts`: confirmed interface contracts for all new or modified interfaces (Stage 4 output); "No new or modified interfaces" if none
+  - `task_breakdown`: confirmed task breakdown — ordered list of tasks with names, numbers, and dependencies (Stage 7 output)
+  - `test_strategy`: confirmed test strategy — integration test owner, E2E approach, cross-task constraints (Stage 8 output)
+  - `risks_and_constraints`: confirmed risks and constraints — each risk with why it matters and mitigation (Stage 9 output)
+  - `adr_references`: confirmed ADR references — existing ADRs that constrain the design, plus any new ADRs to create (Stage 10 output); "No ADR references" if none
+  - `requirements_source_path`: path to the requirements source file (e.g. `docs/requirements/AIDEV-82-foo.md` or JIRA key)
+  - `branch`: branch name established in SKILL.md Stage 1
+  - `ticket`: JIRA ticket key (e.g. `AIDEV-82`)
+  - `engineer`: engineer name
+  - `date`: ISO 8601 date
+
+Read `synthesis_path` in full before writing. If it cannot be read, fail and report the unreadable path — SKILL.md surfaces the failure and offers to retry.
 
 ## Constraints
 

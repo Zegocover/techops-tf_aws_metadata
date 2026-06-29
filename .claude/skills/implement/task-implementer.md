@@ -139,15 +139,61 @@ Store `BASE` — it is used in Stage 6 to determine whether to pass `base` to `c
 
 **Refuse if the branch already exists; otherwise create it from `BASE`:**
 
+First detect whether the branch exists, emitting a neutral sentinel:
+
 ```bash
-if git show-ref --verify --quiet "refs/heads/{branch}"; then
-  echo "Branch {branch} already exists locally — delete it (git branch -D {branch}) before re-running. No automatic reset or reuse."
-  exit 1
-fi
-git checkout -b {branch} {BASE}
+git show-ref --verify --quiet "refs/heads/{branch}" && echo "EXISTS" || echo "ABSENT"
 ```
 
-There is no silent branch reuse: a pre-existing local branch is a hard refusal, not a checkout. The engineer's recovery is to run `git branch -D {branch}` and re-invoke. If `git checkout -b {branch} {BASE}` itself fails (e.g. `BASE` is not a valid local ref), surface its error verbatim and halt before Stage 1 runs — do not let the run continue and trip Stage 1's branch-mismatch assertion as a misleading proxy.
+- **`EXISTS`** → stop. Report this verbatim error to the user and do not proceed:
+
+  > Branch {branch} already exists locally — delete it (git branch -D {branch}) before re-running. No automatic reset or reuse.
+
+  Report it as text (the same way every other Stage 0 error is surfaced) — do **not** route it through a shell `echo`. The recovery hint names `git branch -D`, and this repo's own `git-safety` hook blocks any Bash command whose text matches that pattern, so an `echo`-based refusal would itself be blocked before it could print. The hint is still correct for the engineer to run in their own terminal (the hook only intercepts Claude's Bash tool, not the engineer's shell); it just must not be echoed from within the skill.
+
+- **`ABSENT`** → create the branch from `BASE`:
+
+  ```bash
+  git checkout -b {branch} {BASE}
+  ```
+
+There is no silent branch reuse: a pre-existing local branch is a hard refusal, not a checkout. The engineer's recovery is to delete the branch (`git branch -D {branch}`) and re-invoke. If `git checkout -b {branch} {BASE}` itself fails (e.g. `BASE` is not a valid local ref), surface its error verbatim and halt before Stage 1 runs — do not let the run continue and trip Stage 1's branch-mismatch assertion as a misleading proxy.
+
+### 0e — Spec-ambiguity pre-flight
+
+Before any artefact is produced, verify the task spec is implementable as-written. This is a deterministic structural check over the spec body that was read in `0a`. It catches the obvious "spec is still template / empty / placeholder" failure modes that would otherwise cause the writer agent to improvise — exactly the behaviour the AI Eng Process Change framework forbids. Subtle semantic ambiguity (vague phrasing that survives the structural check) is the spec-quality agent's territory, not this stage's.
+
+If any of the checks below fail, halt with the templated message under that check and do not proceed to Stage 1. The branch created in `0d` is left in place for the engineer's recovery flow (update the spec on the design branch, push, re-invoke `implement` — the existing `git branch -D` recovery from 0d applies if a fresh start is desired). A 0e halt is surfaced verbatim the same way Stage 0a–0d halts are; no mode detection happens here, and the orchestrator's OM-5 generic non-PASS branch handles a 0e halt as `failed` like any other Stage 0 stop.
+
+**Shared placeholder definition.** All four checks use one rule: a spec line is a **placeholder** if it appears verbatim in `.claude/templates/task-spec.md` under the same section heading. The template ships with the skill and is the canonical source of template content; comparing against it is robust to template edits (the rule auto-tracks them) and side-steps fragile marker enumerations.
+
+Implementation: read `.claude/templates/task-spec.md` once at the start of 0e. For each section in the spec being checked, collect (a) the spec's bullets/lines under the section heading, and (b) the template's bullets/lines under the same heading. A spec line is a placeholder iff it matches a template line for that section after a trim of leading/trailing whitespace. A section is "template-only" iff every non-empty line under its heading is a placeholder.
+
+**Check 1 — Acceptance criteria present and populated.** The spec body must contain an `## Acceptance criteria` heading with at least one bullet that starts with `- [ ]`. At least one `- [ ]` bullet must NOT be a placeholder (per the shared definition above). Halt if the heading is absent, the section is empty, or every `- [ ]` bullet is a placeholder.
+
+Halt message:
+
+> Spec-ambiguity halt — Acceptance criteria missing or template-only in `{task-spec-path}`. `implement` requires at least one populated `- [ ]` acceptance-criterion bullet before the writer is invoked. Update the spec on the design branch, push it, and re-invoke `implement`.
+
+**Check 2 — Implementation constraints present and populated.** The spec body must contain an `## Implementation constraints` heading with at least one bullet. At least one bullet must NOT be a placeholder. Halt if the heading is absent, the section is empty, or every bullet is a placeholder.
+
+Halt message:
+
+> Spec-ambiguity halt — Implementation constraints missing or template-only in `{task-spec-path}`. `implement` requires populated implementation constraints. Update the spec on the design branch, push it, and re-invoke `implement`.
+
+**Check 3 — Objective is non-template.** The spec body must contain an `## Objective` heading. The section body must be non-empty AND not a placeholder under the shared definition.
+
+Halt message:
+
+> Spec-ambiguity halt — Objective missing or template-only in `{task-spec-path}`. `implement` requires a concrete objective sentence. Update the spec on the design branch, push it, and re-invoke `implement`.
+
+**Check 4 — Inputs / outputs / errors populated.** The spec body must contain an `## Inputs and outputs` heading with `Inputs:`, `Outputs:`, and `Errors:` sub-sections. Each sub-section must contain at least one line that is NOT a placeholder under the shared definition (with the explicit `Errors: none` form accepted in place of an Errors sub-list). Halt if any sub-section is absent or template-only.
+
+Halt message:
+
+> Spec-ambiguity halt — Inputs / outputs / errors missing or template-only in `{task-spec-path}`. `implement` requires populated `Inputs:`, `Outputs:`, and `Errors:` declarations under `## Inputs and outputs`. Update the spec on the design branch, push it, and re-invoke `implement`.
+
+All four checks are pure structural string matching — one `Read` of `.claude/templates/task-spec.md` plus the spec body that `0a` already loaded. No model judgement, no other file I/O. A spec that passes all four is considered ambiguity-clean for the purposes of this gate; semantic-level ambiguity is the spec-quality agent's responsibility and is enforced separately.
 
 ---
 
@@ -389,6 +435,7 @@ Do not ask questions — all inputs are below.
 ticket: {ticket}
 branch: {branch}
 task_spec_path: {task spec path}
+labels: ai-implementation
 ```
 
 If `Depends on:` resolved in Stage 0 is not `nothing`, append `base: {BASE}` as an additional line in the inputs block above before sending. When `Depends on: nothing`, omit the `base` line entirely — do not pass an empty or null value.

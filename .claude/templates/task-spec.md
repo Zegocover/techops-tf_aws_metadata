@@ -79,10 +79,10 @@ Errors:
 
 ## Definition of done
 
-- [ ] Implementation passes all unit tests
-- [ ] No hardcoded values
-- [ ] Passes all language-specific linting and type-checking rules defined in CLAUDE.md
-- [ ] Consistent with [specific pattern referenced in Context]
+- Implementation passes all unit tests
+- No hardcoded values
+- Passes all language-specific linting and type-checking rules defined in CLAUDE.md
+- Consistent with [specific pattern referenced in Context]
 
 ## Required output format
 

@@ -10,3 +10,4 @@
 - [resilience.md](resilience.md) — resilience conventions: retry only transient failures, exponential backoff with jitter, maximum retry counts, explicit timeouts, and idempotency keys.
 - [spelling.md](spelling.md) — UK English house style for all human-readable text: comments, docstrings, log messages, error messages; identifiers and API contracts exempt.
 - [commit-workflow.md](commit-workflow.md) — commit workflow conventions: pre-commit hooks run on every commit, fix-and-retry on failure, never bypass with --no-verify, graceful no-hook handling.
+- [skill-pipeline.md](skill-pipeline.md) — the development pipeline: which skill to use when, the requirements-to-merged-PR ordering, the per-phase PR handoff shape, skip rules, and the off-path utilities.

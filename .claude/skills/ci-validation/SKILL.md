@@ -27,8 +27,8 @@ Follow this priority chain. Check each source in order. If a source file
 exists but yields no extractable commands, fall through to the next source.
 Stop at the first source that yields at least one command.
 
-1. **CLAUDE.md frontmatter `ci-test-command`.**
-   Read the consumer repo's `CLAUDE.md`. If the managed frontmatter block
+1. **CLAUDE.local.md frontmatter `ci-test-command`.**
+   Read the consumer repo's `CLAUDE.local.md`. If its frontmatter
    contains a `ci-test-command` key whose value is non-empty, use it. The value
    may be a single command string or a newline-separated list of commands. Split
    on newlines and trim whitespace to produce the command list.
@@ -58,7 +58,7 @@ Stop at the first source that yields at least one command.
 **For repos with complex pipelines** (multi-line command blocks, Docker
 invocations, plugin-heavy steps), automatic extraction may produce
 inconsistent results across runs. Declare `ci-test-command` explicitly in
-CLAUDE.md frontmatter rather than relying on extraction. See
+CLAUDE.local.md frontmatter rather than relying on extraction. See
 [ADR 003](docs/decisions/003-claudemd-frontmatter.md) for format details.
 
 ---
@@ -73,7 +73,7 @@ Once commands are discovered, prepare them for execution:
 
   > CI validation cannot proceed: `{command}` references a `make` target but
   > no Makefile exists in the working tree. Either add a Makefile or declare
-  > the underlying commands via `ci-test-command` in CLAUDE.md frontmatter.
+  > the underlying commands via `ci-test-command` in CLAUDE.local.md frontmatter.
 
   Do not attempt to guess the underlying tool command. Do not skip the command.
   Return verdict: **failed**.
@@ -86,7 +86,7 @@ Once commands are discovered, prepare them for execution:
 
   > CI validation cannot proceed: `{command}` references make target
   > `{target}` but it is not defined in the Makefile. Either add the target
-  > or declare the underlying commands via `ci-test-command` in CLAUDE.md
+  > or declare the underlying commands via `ci-test-command` in CLAUDE.local.md
   > frontmatter.
 
   Do not attempt to guess the underlying tool command. Do not skip the command.
@@ -382,7 +382,7 @@ command's outcome is visible, not silently dropped.
   to the implement skill. Do not retry or fix within this skill — the
   implement skill's fix loop handles that.
 - **CI command discovery follows a strict priority chain.** Check
-  `ci-test-command` in CLAUDE.md frontmatter first, then
+  `ci-test-command` in CLAUDE.local.md frontmatter first, then
   `.buildkite/pipeline.yml`, then `.github/workflows/*.yml`. Stop at the first
   source that yields commands. Do not merge commands from multiple sources.
 - **Do not hardcode `make` target names.** Discover targets from the CI

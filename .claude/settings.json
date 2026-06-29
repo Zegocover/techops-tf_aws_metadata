@@ -15,10 +15,6 @@
           {
             "type": "command",
             "command": "bash .claude/hooks/database-safety.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/terraform-safety.sh"
           }
         ]
       }
@@ -35,11 +31,15 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git checkout:*)",
+      "Bash(git rebase --continue)",
+      "Bash(git rebase --abort)",
+      "Bash(git rebase origin/:*)",
       "Bash(git pull origin main)",
       "Bash(git pull origin HEAD)",
       "Bash(git push -u origin:*)",
       "Bash(gh pr list:*)",
       "Bash(gh pr view:*)",
+      "Bash(gh pr edit:*)",
       "Bash(gh pr checks:*)",
       "Bash(gh pr diff:*)",
       "Bash(rg:*)",
@@ -52,7 +52,8 @@
       "Bash(.claude/scripts/pr-issue-reply.sh:*)",
       "Bash(.claude/scripts/pr-resolve.sh:*)",
       "Bash(.claude/scripts/req-branch.sh:*)",
-      "Bash(.claude/scripts/req-pr.sh:*)"
+      "Bash(.claude/scripts/req-pr.sh:*)",
+      "Bash(.claude/scripts/pr-label.sh:*)"
     ],
     "deny": [
       "Bash(find:*)",
