@@ -1,7 +1,7 @@
 # CI validation fix loop — shared across skills
 
-This file is referenced by calling skills (e.g. `.claude/skills/implement/SKILL.md`,
-`.claude/skills/fix-pr-comments/SKILL.md`, `.claude/skills/fix-buildkite/SKILL.md`). It
+This file is referenced by calling skills (e.g. `.claude/skills/zego-implement/SKILL.md`,
+`.claude/skills/zego-fix-pr-comments/SKILL.md`, `.claude/skills/zego-fix-buildkite/SKILL.md`). It
 contains the detailed steps (Step 1, Step 2, Step 3) and the per-cycle commit
 flow for the CI validation and fix loop.
 
@@ -48,8 +48,8 @@ the marker) and control to the caller.
 Spawn an Agent. Fill every placeholder before sending.
 
 ```
-You are running the `ci-validation` skill.
-Read `.claude/skills/ci-validation/SKILL.md` and execute it from Stage 1.
+You are running the `zego-ci-validation` skill.
+Read `.claude/skills/zego-ci-validation/SKILL.md` and execute it from Stage 1.
 Do not ask questions — all context is below.
 
 Ticket: {ticket}
@@ -118,7 +118,7 @@ verdict handling below. Do NOT abort the loop on a commit failure.
 After the per-cycle commit, handle the verdict:
 
 **The verdict the loop RETURNS is not the same vocabulary as the inner
-`ci-validation` skill's Stage 4 verdict.** The spawned sub-agent (Step 1)
+`zego-ci-validation` skill's Stage 4 verdict.** The spawned sub-agent (Step 1)
 returns `verdict: passed` or `verdict: failed` (Interface A). The loop
 translates that into its own return vocabulary (Interface B): `verdict: passed`
 or `verdict: failed-max-iterations`. There is NO `verdict: failed` at the loop

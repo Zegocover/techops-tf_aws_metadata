@@ -1,6 +1,6 @@
 ---
-version: 1.4
-last_reviewed: 2026-06-05
+version: 1.5
+last_reviewed: 2026-06-23
 ---
 
 # Python Standards
@@ -59,6 +59,7 @@ Where the surface is absent, do not raise a finding demanding that a lone module
 25. **`secrets_dir` for filesystem-mounted secrets.** Set `secrets_dir` in `SettingsConfigDict` to the mount path (`/mnt/<service-name>`) so Pydantic reads secret files natively — secrets provisioned via `secrets-config` are mounted at this path by the Blueprint infrastructure.
 26. **Env file loading with `SettingsConfigDict`.** Declare `env_file=(".env.development", ".env")` so Pydantic loads committed development values as the base and gitignored personal overrides on top — this implements the committed/gitignored config file layout from `docs/ai/steering/base/environment.md`.
 27. **pytest-dotenv for test configuration.** Configure `pytest-dotenv` with `env_files = ".env.development"` in `pyproject.toml` so tests load the same safe defaults as local development.
+28. **OTel instrumentors in `pyproject.toml`; run under `opentelemetry-instrument`.** Declare `opentelemetry-distro` (which provides the `opentelemetry-instrument` entrypoint), `opentelemetry-exporter-otlp`, and a per-framework instrumentor (`opentelemetry-instrumentation-fastapi`, `-httpx`, `-grpc`, etc.) for each library actually in use; keep the `1.x` (api/sdk/exporter) and `0.x` (instrumentation/semantic-conventions) version lines in lockstep when bumping. Run the service under `opentelemetry-instrument python -m <app>` and keep any in-app SDK or instrumentor wiring minimal — targeted hooks (e.g. a request hook that strips PII from a recorded URL) are fine; a parallel SDK setup that duplicates the entrypoint is not. See `docs/ai/steering/base/observability.md` rule 4.
 
 ## Functional core, imperative shell
 
@@ -692,6 +693,10 @@ Configure `pytest-dotenv` to load `.env.development` for tests so that test runs
 [tool.pytest.ini_options]
 env_files = ".env.development"
 ```
+
+## OTel instrumentors in `pyproject.toml`; run under `opentelemetry-instrument`
+
+`opentelemetry-instrument` activates whichever instrumentors the lockfile has synced into the environment at process start, so `pyproject.toml` is the contract for what telemetry the service emits. Add `opentelemetry-distro` (which provides the CLI entrypoint and a no-op SDK setup), `opentelemetry-exporter-otlp` (the distro only bundles it via the `[otlp]` extra, so list it explicitly), and a per-framework instrumentor for each library actually in use — for FastAPI services that is typically `opentelemetry-instrumentation-fastapi` and `opentelemetry-instrumentation-httpx`. The OTel Python ecosystem ships on two version lines that must move together: api/sdk/exporter on `1.x` and instrumentation/semantic-conventions on `0.x`. Bump them in the same change; mixing lines produces import-time `TypeError`s at boot. The service is then launched with `opentelemetry-instrument python -m <app>` (or the equivalent Dockerfile `CMD`). Keep any in-app wiring minimal: a targeted instrumentor hook (for example a request hook stripping query-string PII off recorded URLs) is fine, but a parallel `TracerProvider` / exporter setup duplicating what the entrypoint already configures is not.
 
 ## See Also
 

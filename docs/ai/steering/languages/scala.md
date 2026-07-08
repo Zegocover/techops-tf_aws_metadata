@@ -1,6 +1,6 @@
 ---
-version: 1.0
-last_reviewed: 2026-06-01
+version: 1.1
+last_reviewed: 2026-06-23
 ---
 
 # Scala Standards
@@ -38,6 +38,7 @@ Structural and architectural conventions for Scala 2.13 services — how busines
 27. **Centralised `project/Dependencies.scala`; one method per module.** All library coordinates and pinned versions live in `project/Dependencies.scala` as a `val <name>Version = "x.y.z"` constant plus a `def <module>Dependencies: Seq[ModuleID]`. `build.sbt` references only `Dependencies.<module>Dependencies` — never inlines a library coordinate. Same rule for `scalacOptions`: shared options go on `ThisBuild`; module-specific overrides explained with a one-line comment.
 28. **Fixture pattern for complex test setups.** When ≥3 `it(...)` blocks share non-trivial setup (a stub adapter, a fake clock, a pre-populated repository), inline it into a `Fixture` class and `import f._` inside each block; for ≤2 blocks inline the setup in the block body — below that threshold a fixture adds indirection for no gain.
 29. **Integration test setup.** Integration tests own their dependencies via `testcontainers-scala` started from within the test process — never depend on external orchestration (`docker-compose up`, a manually-started LocalStack, shared CI services); a clean checkout must pass `sbt "project integration-test; test"` with no other command, because a self-contained test is the only one that runs reliably in CI and on a fresh machine.
+30. **Cinnamon modules in `build.sbt`; agent pinned via `sbt-cinnamon` plugin.** Add `sbt-cinnamon` to `project/plugins.sbt` so the Cinnamon agent is pinned at build time; declare each Cinnamon module the service uses (`Cinnamon.library.cinnamonAkka`, `Cinnamon.library.cinnamonAkkaStream`, `Cinnamon.library.cinnamonAkkaGrpc`, etc.) under `libraryDependencies` in `build.sbt` (via `project/Dependencies.scala` per rule 27) so the manifest names every instrumentor the service emits. Keep any in-app SDK or instrumentor wiring minimal, per `docs/ai/steering/base/observability.md` rule 4.
 
 ---
 
@@ -645,6 +646,10 @@ lazy val policyEventPublisher = project
 ```
 
 Same rule for `scalacOptions`: shared options belong on `ThisBuild`; module-specific overrides explained with a one-line comment in the sub-project's `settings`.
+
+## Cinnamon modules in `build.sbt`; agent pinned via `sbt-cinnamon` plugin
+
+The Cinnamon agent is pinned at build time by `addSbtPlugin("com.lightbend.cinnamon" % "sbt-cinnamon" % "<version>")` in `project/plugins.sbt`; `build.sbt` then references whichever Cinnamon modules the service actually uses — `cinnamonAkka` for Akka actors, `cinnamonAkkaStream` for streams, `cinnamonAkkaGrpc` for the gRPC surface, and so on. The plugin loads the agent; the declared modules contribute their instrumentation. Per rule 27, the plugin version and any module pins belong in the centralised dependencies wiring (`project/Dependencies.scala` for modules, `project/plugins.sbt` for the plugin itself), not inlined in `build.sbt` settings. Keep any in-app wiring minimal — targeted configuration (for example a tag enricher or a metric filter) is fine; a parallel SDK setup duplicating what the agent already configures is not.
 
 ## See Also
 

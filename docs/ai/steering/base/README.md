@@ -11,3 +11,4 @@
 - [spelling.md](spelling.md) — UK English house style for all human-readable text: comments, docstrings, log messages, error messages; identifiers and API contracts exempt.
 - [commit-workflow.md](commit-workflow.md) — commit workflow conventions: pre-commit hooks run on every commit, fix-and-retry on failure, never bypass with --no-verify, graceful no-hook handling.
 - [skill-pipeline.md](skill-pipeline.md) — the development pipeline: which skill to use when, the requirements-to-merged-PR ordering, the per-phase PR handoff shape, skip rules, and the off-path utilities.
+- [review-audience.md](review-audience.md) — review-audience conventions: the human-review-vs-AI-native artefact split and its decisive test, per-artefact buckets, the AI-native deflecting banner (text, placement, per-skill link resolution), and the single PR review-surface line.

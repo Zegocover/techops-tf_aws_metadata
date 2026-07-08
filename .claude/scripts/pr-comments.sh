@@ -161,7 +161,7 @@ gh api graphql \
       ]
 
     # ── Top-level PR conversation comments ───────────────────────
-    # No bot filtering — the fix-pr-comments skill triages all
+    # No bot filtering — the zego-fix-pr-comments skill triages all
     # comments and can classify irrelevant ones as acknowledged.
     + [
         $pr.comments.nodes[]

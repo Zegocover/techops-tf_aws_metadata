@@ -1,7 +1,10 @@
 ---
 ticket: [TICKET]
 branch: {TICKET}_{slug}
+feature-id: [optional — the recovered or minted feature identifier, e.g. quartz-amber-ronin-7e67; omit if none]
 ---
+
+> **AI-native artefact.** Human reviewers do not need to read this; the review surface for this phase is the {surface} at {link}.
 
 # Task: [TASK-NN] [Name]
 Feature: [JIRA ticket or link to requirements]
@@ -10,6 +13,10 @@ Depends on: nothing / TICKET-TASK-NN-slug.md
 
 <!-- Feature, Design, and Depends on are required header lines in the body,
      not frontmatter. They are enforced by convention, not by YAML parsing.
+     feature-id is an optional third permitted frontmatter key (alongside
+     ticket and branch, per ADR 020): the recovered or minted feature
+     identifier that links this task's PR to its sibling phase PRs. Omit the
+     key entirely when there is no identifier.
      Depends on: valid values:
        - The literal string "nothing" (no dependency)
        - The exact filename (not path) of a task spec in docs/tasks/,

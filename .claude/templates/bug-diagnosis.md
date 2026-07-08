@@ -2,6 +2,8 @@
 ticket: [TICKET]
 ---
 
+> **AI-native artefact.** Human reviewers do not need to read this; the review surface for this phase is the {surface} at {link}.
+
 # Bug diagnosis: [TICKET] [Ticket summary]
 
 JIRA: https://zegons.atlassian.net/browse/[TICKET]

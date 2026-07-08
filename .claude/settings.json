@@ -6,15 +6,35 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/git-safety.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/git-safety.sh\""
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/filesystem-safety.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/filesystem-safety.sh\""
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/database-safety.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/database-safety.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/terraform-safety.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/aws-safety.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/kubernetes-safety.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/helm-safety.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/argocd-safety.sh\""
           }
         ]
       }
@@ -51,9 +71,12 @@
       "Bash(.claude/scripts/pr-reply.sh:*)",
       "Bash(.claude/scripts/pr-issue-reply.sh:*)",
       "Bash(.claude/scripts/pr-resolve.sh:*)",
+      "Bash(.claude/scripts/pr-scratch-write.sh:*)",
+      "Bash(.claude/scripts/pr-scratch-clean.sh:*)",
       "Bash(.claude/scripts/req-branch.sh:*)",
       "Bash(.claude/scripts/req-pr.sh:*)",
-      "Bash(.claude/scripts/pr-label.sh:*)"
+      "Bash(.claude/scripts/pr-label.sh:*)",
+      "Bash(.claude/scripts/feature-id.sh:*)"
     ],
     "deny": [
       "Bash(find:*)",
