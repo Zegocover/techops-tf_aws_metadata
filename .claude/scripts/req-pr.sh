@@ -180,12 +180,69 @@ fi
 
 git push -u origin "$CURRENT_BRANCH"
 
+# --- Feature-Id trailer (best-effort, idempotent) ---
+#
+# The requirements skill writes the feature identifier into the requirements
+# doc's metadata table BEFORE calling this script (the artefact-backed passing
+# convention, AIDEV-188 / ADR 020). Recover it from $REQ_FILE and stamp it as
+# the very last line of the PR body — in the manner of a Co-Authored-By
+# trailer — so the (out-of-scope) reporting tool can correlate sibling PRs.
+#
+# Mirrors pr-label.sh's always-best-effort behaviour: a recover or stamp
+# failure warns and is tolerated; it must NEVER abort req-pr.sh. The trailer is
+# a body line, not a label, so pr-label.sh is left untouched.
+FEATURE_ID="$("$(dirname "$0")/feature-id.sh" recover "$REQ_FILE" 2>/dev/null || true)"
+
+# Append the trailer to a body FILE as its last line, idempotently. Skips the
+# append when the body already carries a Feature-Id: line (a re-run must never
+# double-stamp). Always returns success — best-effort.
+append_feature_id_trailer_to_file() {
+  local body_file="$1" id="$2"
+  [[ -z "$id" ]] && return 0
+  if grep -qiE '^feature-?id:' "$body_file" 2>/dev/null; then
+    return 0
+  fi
+  # Ensure the existing body ends with a newline before appending the trailer,
+  # so the trailer lands on its own final line.
+  if [[ -s "$body_file" && -n "$(tail -c 1 "$body_file")" ]]; then
+    printf '\n' >> "$body_file" 2>/dev/null || return 0
+  fi
+  printf 'Feature-Id: %s\n' "$id" >> "$body_file" 2>/dev/null || true
+  return 0
+}
+
+if [[ -n "$FEATURE_ID" ]]; then
+  append_feature_id_trailer_to_file "$BODY_FILE" "$FEATURE_ID"
+else
+  echo "req-pr: no feature identifier recovered from '$REQ_FILE' — PR will not carry a Feature-Id trailer" >&2
+fi
+
 # --- Create PR (or report existing) ---
 
 EXISTING_PR="$(gh pr list --head "$CURRENT_BRANCH" --state open --json url -q '.[0].url' 2>/dev/null || true)"
 
 if [[ -n "$EXISTING_PR" ]]; then
   echo "Pushed to existing PR: $EXISTING_PR"
+  # Stamp the Feature-Id trailer onto the existing PR's body, idempotently and
+  # best-effort. This is the update path: fetch the current body, skip if it
+  # already carries a Feature-Id: line, otherwise append the trailer as the
+  # last line and write it back. Every gh outcome is tolerated — a stamp
+  # failure warns and is ignored, never aborting req-pr.sh.
+  if [[ -n "$FEATURE_ID" ]]; then
+    EXISTING_BODY="$(gh pr view "$EXISTING_PR" --json body -q '.body' 2>/dev/null || true)"
+    if [[ -z "$EXISTING_BODY" ]]; then
+      echo "req-pr: existing PR has an empty body — skipping Feature-Id trailer stamp to avoid overwriting it" >&2
+    elif printf '%s\n' "$EXISTING_BODY" | grep -qiE '^feature-?id:' 2>/dev/null; then
+      echo "req-pr: existing PR already carries a Feature-Id trailer — skipping (idempotent)" >&2
+    else
+      UPDATED_BODY="$(printf '%s\nFeature-Id: %s\n' "$EXISTING_BODY" "$FEATURE_ID")"
+      if gh pr edit "$EXISTING_PR" --body "$UPDATED_BODY" >/dev/null 2>&1; then
+        echo "req-pr: stamped Feature-Id trailer onto $EXISTING_PR" >&2
+      else
+        echo "req-pr: could not stamp Feature-Id trailer onto $EXISTING_PR — continuing" >&2
+      fi
+    fi
+  fi
   # Apply the requirements stage label. Pass the PR URL we already hold so
   # pr-label.sh skips a redundant branch->PR lookup. pr-label.sh always
   # exits 0; the trailing `|| true` decouples this script's `set -euo

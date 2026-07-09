@@ -1,7 +1,7 @@
 # Handoff gate — shared across skills
 
-This file is referenced by calling skills (currently `.claude/skills/implement/task-implementer.md`,
-`.claude/skills/implement/feature-orchestrator.md`, and `.claude/skills/review/SKILL.md`). It
+This file is referenced by calling skills (currently `.claude/skills/zego-implement/task-implementer.md`,
+`.claude/skills/zego-implement/feature-orchestrator.md`, and `.claude/skills/zego-review/SKILL.md`). It
 contains the single, parameterised PR-existence query that supports the
 design → implement → review handoff: the prior phase must have an open or
 merged pull request before the next phase begins.
@@ -24,7 +24,7 @@ The calling skill must fill the following placeholders before executing:
 
 | Placeholder | Required | Description |
 |-------------|----------|-------------|
-| `{branch}` | yes | The prior-phase branch whose PR must exist. For `implement` this is the design branch read from the design doc's `Branch:` header. For `review` this is the current branch (`git rev-parse --abbrev-ref HEAD`). |
+| `{branch}` | yes | The prior-phase branch whose PR must exist. For `zego-implement` this is the design branch read from the design doc's `Branch:` header. For `zego-review` this is the current branch (`git rev-parse --abbrev-ref HEAD`). |
 | `{override_active}` | yes | Boolean. The caller has already parsed `--no-handoff-gate` from its arguments; the gate trusts this value verbatim. |
 
 The gate does NOT take `{phase_name}` or `{skill_name}` — the gate no longer

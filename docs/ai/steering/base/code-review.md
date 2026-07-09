@@ -7,13 +7,13 @@ last_reviewed: 2026-06-05
 
 Instructions for reviewing a diff against Zego standards. Defines which checks run, how they are grouped, and what the output must look like.
 
-This document is what the `review` skill checks against. An agent running a review must work through every check mechanically against the diff. Writing a review file by hand without running the checks does not satisfy the workflow.
+This document is what the `zego-review` skill checks against. An agent running a review must work through every check mechanically against the diff. Writing a review file by hand without running the checks does not satisfy the workflow.
 
 ---
 
 ## Groups
 
-Checks are divided into eleven groups, each run by a dedicated sub-agent in parallel. Groups E, F, G, I, and J are conditional — only spawn them if the relevant conditions are met.
+Checks are divided into fourteen groups, each run by a dedicated sub-agent in parallel. Groups E, F, G, I, J, K, M, and N are conditional — only spawn them if the relevant conditions are met.
 
 | Group | Name | Standard file(s) | Conditional? |
 |---|---|---|---|
@@ -27,7 +27,10 @@ Checks are divided into eleven groups, each run by a dedicated sub-agent in para
 | H | Error Handling, File Organisation, Resilience & Spelling | `docs/ai/steering/base/error-handling.md`, `docs/ai/steering/base/file-organisation.md`, `docs/ai/steering/base/resilience.md`, `docs/ai/steering/base/spelling.md` | Never |
 | I | HCL/Terraform | `docs/ai/steering/languages/hcl.md` | Only if `.tf` or `.tfvars` files in diff |
 | J | Scala | `docs/ai/steering/languages/scala.md` | Only if `.scala` files in diff |
-| L | Financial Integrity | (delegates to `audit-financial-integrity` skill) | Never |
+| K | Swift | `docs/ai/steering/languages/swift.md` | Only if `.swift` files in diff |
+| L | Financial Integrity | (delegates to `zego-audit-financial-integrity` skill) | Never |
+| M | Kotlin | `docs/ai/steering/languages/kotlin.md` | Only if `.kt` files in diff |
+| N | Protobuf Authoring | `docs/ai/steering/domains/protobuf-authoring.md` | Only if `.proto` files in diff |
 
 ---
 
@@ -132,13 +135,21 @@ Load and apply all rules from `docs/ai/steering/languages/scala.md`. Check every
 
 ---
 
+## Group K — Swift (conditional)
+
+Only run if the diff contains `.swift` files.
+
+Load and apply all rules from `docs/ai/steering/languages/swift.md`. Check every new or modified Swift file.
+
+---
+
 ## Group L — Financial Integrity
 
-This group delegates to the `audit-financial-integrity` skill. It is the behaviour-and-integrity check that the operating model treats as a mandatory part of every review — its job is to surface code that looks designed to do something it should not be doing, distinct from the security vulnerabilities Group D covers.
+This group delegates to the `zego-audit-financial-integrity` skill. It is the behaviour-and-integrity check that the operating model treats as a mandatory part of every review — its job is to surface code that looks designed to do something it should not be doing, distinct from the security vulnerabilities Group D covers.
 
 In scope for this group (drawn from the skill's threat catalogues): fund skimming and payment diversion; ledger and balance-correctness drift; refund / void / unapplied-cash abuse; AML / sanctions / KYC control weakening; auth and privilege-escalation backdoors; reverse shells and unintended outbound exfiltration channels; hardcoded wallet addresses and private keys; disabled or weakened audit logging; and malicious or suspicious dependency additions.
 
-The sub-agent must invoke the `audit-financial-integrity` skill against the current diff and translate its output into the standard per-check tagged-line block and YAML findings list defined under `## Output format` below. The skill itself never approves a PR — it is advise-only by design (per its own `## Rules` section). For this group's findings:
+The sub-agent must invoke the `zego-audit-financial-integrity` skill against the current diff and translate its output into the standard per-check tagged-line block and YAML findings list defined under `## Output format` below. The skill itself never approves a PR — it is advise-only by design (per its own `## Rules` section). For this group's findings:
 
 - Critical or high-severity findings from the audit map to `[blocker]` — they must be surfaced to a human reviewer before merge.
 - Medium-severity findings map to `[error]` (major).
@@ -146,6 +157,22 @@ The sub-agent must invoke the `audit-financial-integrity` skill against the curr
 - A clean audit emits one `[pass]` line summarising the verdict.
 
 Findings from this group are advisory toward the human reviewer who adjudicates the gate — they do not commit the reviewer to a block-or-approve decision; they ensure the suspicious pattern is visible.
+
+---
+
+## Group M — Kotlin (conditional)
+
+Only run if the diff contains `.kt` files.
+
+Load and apply all rules from `docs/ai/steering/languages/kotlin.md`. Check every new or modified Kotlin file.
+
+---
+
+## Group N — Protobuf Authoring (conditional)
+
+Only run if the diff contains `.proto` files.
+
+Load and apply all rules from `docs/ai/steering/domains/protobuf-authoring.md`. Check every new or modified `.proto` file against the contract-authoring rules (cross-service imports, reuse of shared `zego.protobuf` common types, contract-level comments, field optionality and numbering, the success/failure result model); apply the validation-workflow rules only when the diff is in a protobuf repository with the `buf` toolchain. If the standard file does not exist, skip this group and record a validation error.
 
 ---
 

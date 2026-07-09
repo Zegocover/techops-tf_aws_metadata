@@ -32,24 +32,29 @@ keep it current as the skill set changes.
    a substitute for the investigation. Arrive with the real requirements,
    decisions, and research in hand, and do not use a skill to fill in
    information you have not actually established.
-1. **The happy path is four skills in order.** `write-requirements` →
-   `write-design-doc` → `implement` → `write-acceptance-handoff`. This is the
+1. **The happy path is four skills in order.** `zego-write-requirements` →
+   `zego-write-design-doc` → `zego-implement` → `zego-write-acceptance-handoff`. This is the
    default route for a feature that starts from a product need and ends at a
    merged, signed-off change.
 2. **Each phase hands off through its own PR — not one PR at the end.** The
    design phase, the implementation phase, and any remediation each produce a
    pull request. The design phase's PR must be `OPEN` or `MERGED` before
-   `implement` or `review` runs (the Stage 0 handoff gate). A PR is never
+   `zego-implement` or `zego-review` runs (the Stage 0 handoff gate). A PR is never
    opened automatically.
-3. **`write-requirements` is skippable when requirements are already certain.**
-   The test: could you brief `write-design-doc` without being interviewed?
-4. **`write-design-doc` is the default; `write-design-doc-max` is the explicit
+3. **`zego-write-requirements` is skippable when requirements are already certain.**
+   The test: could you brief `zego-write-design-doc` without being interviewed?
+4. **`zego-write-design-doc` is the default; `zego-write-design-doc-max` is the explicit
    deep-review variant.** Use `-max` only when the user asks for it by name.
-5. **`fix-buildkite` and `fix-pr-comments` are conditional remediation, not
+5. **`zego-fix-buildkite` and `zego-fix-pr-comments` are conditional remediation, not
    stages.** Invoke them only when CI fails or review threads need addressing.
-6. **Some skills are off-path utilities.** Standalone `review`,
-   `ci-validation`, `extend-claude-standards`, `write-standard`, and
-   `write-skill` are reached on demand, not forced into the sequence.
+6. **Some skills are off-path utilities.** Standalone `zego-review`,
+   `zego-ci-validation`, `zego-extend-claude-standards`, `zego-write-standard`, and
+   `zego-write-skill` are reached on demand, not forced into the sequence.
+7. **`zego-brainstorm` is an optional, opt-in pre-design door.** It sits before
+   `zego-write-design-doc` for the "I know the goal, not the route" case, but it is
+   not a stage and engineers do not have to use it: those who already have their
+   own (possibly more advanced) pre-design approach go straight to
+   `zego-write-design-doc`. It requires confirmed requirements as input.
 
 ## The happy path
 
@@ -67,10 +72,10 @@ entirely.
 
 | Step | Skill | Purpose in the flow |
 |---|---|---|
-| 1 | `write-requirements` | Interview a PM or product owner to certainty; produce a structured requirements document. |
-| 2 | `write-design-doc` | Refine requirements into a design document and per-task specs. |
-| 3 | `implement` | Build the artefact described by a task spec. |
-| 4 | `write-acceptance-handoff` | Produce the post-merge acceptance document for product sign-off. |
+| 1 | `zego-write-requirements` | Interview a PM or product owner to certainty; produce a structured requirements document. |
+| 2 | `zego-write-design-doc` | Refine requirements into a design document and per-task specs. |
+| 3 | `zego-implement` | Build the artefact described by a task spec. |
+| 4 | `zego-write-acceptance-handoff` | Produce the post-merge acceptance document for product sign-off. |
 
 ## Phased-PR handoff shape
 
@@ -78,11 +83,11 @@ The pipeline is **phased**: each phase's audit trail is its own pull request,
 and the next phase is gated on the prior phase's PR existing. The work is not
 one PR opened at the very end.
 
-- The **design phase** hands off via a design-phase PR. Before `implement` or
-  `review` runs, a **Stage 0 handoff gate** verifies that the prior phase has a
+- The **design phase** hands off via a design-phase PR. Before `zego-implement` or
+  `zego-review` runs, a **Stage 0 handoff gate** verifies that the prior phase has a
   pull request in `OPEN` or `MERGED` state and halts if it does not. For
-  `implement` the prior phase is design (the gate resolves the design branch
-  out of the design doc); for `review` the prior phase is implementation (the
+  `zego-implement` the prior phase is design (the gate resolves the design branch
+  out of the design doc); for `zego-review` the prior phase is implementation (the
   gate checks the current branch's PR).
 - The gate is **verification-only**: it inspects PR state and never creates or
   opens a PR. A PR is opened only when the user explicitly asks — see
@@ -94,46 +99,46 @@ one PR opened at the very end.
 
 ## Skip rules
 
-`write-requirements` is skippable when the requirements are already certain —
+`zego-write-requirements` is skippable when the requirements are already certain —
 a rich Jira ticket, an existing requirements or design document, or stated
 research that has already been done. The test:
 
-> Could you brief `write-design-doc` without being interviewed first?
+> Could you brief `zego-write-design-doc` without being interviewed first?
 
-If yes, skip `write-requirements` and start at `write-design-doc`. If the
+If yes, skip `zego-write-requirements` and start at `zego-write-design-doc`. If the
 requirements are still fuzzy enough that the design interview would stall on
-"what are we actually building?", run `write-requirements` first.
+"what are we actually building?", run `zego-write-requirements` first.
 
 ## Variant selection
 
-`write-design-doc` is the **default** design-doc flow. `write-design-doc-max`
+`zego-write-design-doc` is the **default** design-doc flow. `zego-write-design-doc-max`
 produces the same artefacts but spends much more context running an incremental
 review of every design and task document; use it **only when the user asks for
 the "max" flow by name**. A generic request to "write a design doc" routes to
-`write-design-doc`.
+`zego-write-design-doc`.
 
 ## Per-skill posture notes
 
-- **`write-design-doc` is prompt refinement, not discovery.** Arrive with the
+- **`zego-write-design-doc` is prompt refinement, not discovery.** Arrive with the
   research done — the skill sharpens a brief into a design and task specs; it
   does not investigate the problem space for you. This is why the
-  `write-requirements` skip test is "could you brief it without an interview".
-- **`ci-validation` relates to the `ci-test-command` frontmatter key.** When
+  `zego-write-requirements` skip test is "could you brief it without an interview".
+- **`zego-ci-validation` relates to the `ci-test-command` frontmatter key.** When
   `ci-test-command` is present in CLAUDE.local.md's frontmatter, it is the
   explicit override for the commands CI validation runs before committing. When
   the key is absent, validation discovers the commands automatically from
   `.buildkite/pipeline.yml` or `.github/workflows/*.yml`. Declaring the key is
-  the fix when automatic discovery is inconsistent. `ci-validation` runs inside
-  `implement` and is also available standalone (see off-path utilities).
-- **`review` checks the diff against the standards.** On the happy path it is
-  not a separate stage: `review` runs inside `implement`'s review-until-PASS
+  the fix when automatic discovery is inconsistent. `zego-ci-validation` runs inside
+  `zego-implement` and is also available standalone (see off-path utilities).
+- **`zego-review` checks the diff against the standards.** On the happy path it is
+  not a separate stage: `zego-review` runs inside `zego-implement`'s review-until-PASS
   loop and is also available standalone (see off-path utilities) as the
   post-PR, on-demand variant. The review mechanics themselves — check groups,
   severities, output format — live in `docs/ai/steering/base/code-review.md`.
-- **`create-pr` opens a phase's PR — not a separate happy-path step.** Like
-  `review` and `ci-validation`, it runs inside the phase skills:
-  `write-design-doc` (and `write-design-doc-max`) and `implement` invoke it to
-  open the design- and implementation-phase PRs, and `fix-bug` invokes it for a
+- **`zego-create-pr` opens a phase's PR — not a separate happy-path step.** Like
+  `zego-review` and `zego-ci-validation`, it runs inside the phase skills:
+  `zego-write-design-doc` (and `zego-write-design-doc-max`) and `zego-implement` invoke it to
+  open the design- and implementation-phase PRs, and `zego-fix-bug` invokes it for a
   bug-fix PR. It is also available standalone for opening a PR outside those
   flows.
 
@@ -142,9 +147,9 @@ the "max" flow by name**. A generic request to "write a design doc" routes to
 These are **post-PR** steps, invoked only when something needs fixing — not
 unconditional stages in the sequence:
 
-- **`fix-buildkite`** — invoke when a Buildkite CI build fails: diagnose, fix,
+- **`zego-fix-buildkite`** — invoke when a Buildkite CI build fails: diagnose, fix,
   retry.
-- **`fix-pr-comments`** — invoke when a pull request has unresolved review
+- **`zego-fix-pr-comments`** — invoke when a pull request has unresolved review
   threads that need addressing.
 
 If CI passes and the PR has no outstanding threads, neither runs.
@@ -154,13 +159,24 @@ If CI passes and the PR has no outstanding threads, neither runs.
 These skills are reached on demand and must not be forced into the happy-path
 sequence:
 
-- **`review`** (standalone) — run a standards review of a branch outside
-  `implement`'s internal review loop, with or without a task spec.
-- **`ci-validation`** (standalone) — run CI validation locally to verify a
-  branch passes before committing, independent of `implement`.
-- **`extend-claude-standards`** — deepen or fill gaps in a repo's
+- **`zego-brainstorm`** (opt-in pre-design door) — explore candidate solution
+  approaches for a ticket *before* `zego-write-design-doc`, when you know the goal but
+  not the route. It runs a council of advocate lenses plus a Skeptic over
+  confirmed requirements and converges on a recommended approach, writing an
+  exploration artefact `zego-write-design-doc` can later consume. It is **opt-in and
+  never a gate**: engineers do **not** have to use it — those who already have
+  their own pre-design approach go straight to `zego-write-design-doc` — and it never
+  blocks, auto-fires, commits, or opens a PR. Consistent with the homework-first
+  principle, it requires confirmed requirements as input; it formalises
+  route-finding on requirements you have already established, it does not invent
+  them.
+- **`zego-review`** (standalone) — run a standards review of a branch outside
+  `zego-implement`'s internal review loop, with or without a task spec.
+- **`zego-ci-validation`** (standalone) — run CI validation locally to verify a
+  branch passes before committing, independent of `zego-implement`.
+- **`zego-extend-claude-standards`** — deepen or fill gaps in a repo's
   `CLAUDE.local.md` repository-context section.
-- **`write-standard`** — author a new standards file or extend an existing one.
-- **`write-skill`** — author a new skill. When a new skill enters the pipeline
-  flow, `write-skill` maintains this document so the happy path and off-path
+- **`zego-write-standard`** — author a new standards file or extend an existing one.
+- **`zego-write-skill`** — author a new skill. When a new skill enters the pipeline
+  flow, `zego-write-skill` maintains this document so the happy path and off-path
   sections stay current.

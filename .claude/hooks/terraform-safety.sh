@@ -50,11 +50,6 @@ if re.search(rf'\b{tf}\s+(-\S+\s+)*state\s+(rm|push|replace-provider|mv)\b', cmd
 if re.search(r'\bmake\b[^|;&\n]*\b(apply|destroy)\b', cmd):
     sys.exit(1)
 
-# Raw AWS CLI — IaC repos manage AWS via Terraform; raw calls are not the
-# workflow. Also matches an absolute/relative path prefix (e.g. /usr/bin/aws).
-if re.search(r'(^|[\s;|&(/])aws\s+', cmd):
-    sys.exit(1)
-
 # Buildkite agent triggering — only the pipeline itself should call this.
 if re.search(r'\bbuildkite-agent\s+(pipeline|annotate|artifact\s+upload|meta-data\s+set)\b', cmd):
     sys.exit(1)
@@ -64,7 +59,22 @@ if re.search(r'\bbuildkite-agent\s+(pipeline|annotate|artifact\s+upload|meta-dat
 if re.search(r'\bgh\s+workflow\s+run\b', cmd):
     sys.exit(1)
 if re.search(r'\bgh\s+api\b', cmd):
-    if re.search(r'(-X|--method)\s+(POST|PATCH|PUT|DELETE)\b', cmd):
+    # Exempt a SINGLE, un-chained gh api call whose endpoint argument is a
+    # PR/issue comments|reviews discussion endpoint, even though it carries a
+    # mutating method or field flag — these are discussion surfaces, not infra
+    # mutation or pipeline triggering. The pattern anchors the WHOLE command
+    # (re.match ... $) and its tail permits only space/tab-separated flags,
+    # rejecting shell command separators, redirects, process substitution and
+    # newlines, so a second command cannot ride along. Every mutating or
+    # pipelined gh api call (dispatches, workflow runs, PR merges, branch
+    # protection, issue creation) falls through to the method/field blocks
+    # below.
+    if re.match(
+        r'\s*gh\s+api\s+/?repos/[^/\s]+/[^/\s]+/'
+        r'(?:pulls|issues)/[^\s?#]*?(?:comments|reviews)(?:/\d+)?'
+        r'(?:[ \t]+[^;&|\`$<>()\r\n]*)?$', cmd):
+        sys.exit(0)
+    if re.search(r'(?i)(-X|--method)(\s+|=)(POST|PATCH|PUT|DELETE)\b', cmd):
         sys.exit(1)
     if re.search(r'(^|\s)(-f|-F|--field|--raw-field|--input)(\s|=)', cmd):
         sys.exit(1)

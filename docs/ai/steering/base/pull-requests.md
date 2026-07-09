@@ -5,7 +5,7 @@ last_reviewed: 2026-05-07
 
 # Pull Request Standards
 
-Conventions for structuring pull requests — the governing principle is that a PR exists to reduce reviewer cognitive load: Background front-loads context, Changes maps the diff, and Jira Ticket/s closes the automation loop. Apply these rules whenever opening or updating a pull request in any repository. Nothing in the PR content or authoring cycle (title, body, structure, sectioning) is mechanically enforced — the rules below describe how to author a PR, not how to gate one. Phase handoff between `write-design-doc` → `implement` → `review` is the exception: it IS mechanically enforced (rule 10).
+Conventions for structuring pull requests — the governing principle is that a PR exists to reduce reviewer cognitive load: Background front-loads context, Changes maps the diff, and Jira Ticket/s closes the automation loop. Apply these rules whenever opening or updating a pull request in any repository. Nothing in the PR content or authoring cycle (title, body, structure, sectioning) is mechanically enforced — the rules below describe how to author a PR, not how to gate one. Phase handoff between `zego-write-design-doc` → `zego-implement` → `zego-review` is the exception: it IS mechanically enforced (rule 10).
 
 ## Rules at a Glance
 
@@ -18,7 +18,8 @@ Conventions for structuring pull requests — the governing principle is that a 
 7. **Use HEREDOC for gh pr create.** Pass the PR body via a HEREDOC when using `gh pr create --body`, copying content from `.github/PULL_REQUEST_TEMPLATE.md` — the CLI does not auto-populate the repo's pull request template.
 8. **PR body must match the template.** When `.github/PULL_REQUEST_TEMPLATE.md` is present, the PR body must reproduce every section heading from the template in the template's order — no sections added, none removed. When no template is present, use the default three-section fallback (Background, Changes, Jira Ticket/s). In either case, do not add extra top-level sections such as `## Test Plan` or `## Notes` — additional sections fragment the reviewer's reading path.
 9. **Apply AI review triggers only on merge-ready branches.** Invoke review labels or workflows only when the branch is in a state you would merge today — every triggered run costs credits and asks a reviewer to read the output.
-10. **Phase handoff is gated by the prior-phase PR.** The `implement` and `review` skills VERIFY at Stage 0 that the prior phase (design for `implement`; implementation for `review`) has an open or merged PR, and HALT if it does not. The gate is verification-only — it NEVER creates or opens a PR (consistent with rule 6). The documented per-invocation exception is `--no-handoff-gate`, intended for spikes and other legitimately design-doc-less work; the override is not a transient-`gh`-failure retry mechanism.
+10. **Phase handoff is gated by the prior-phase PR.** The `zego-implement` and `zego-review` skills VERIFY at Stage 0 that the prior phase (design for `zego-implement`; implementation for `zego-review`) has an open or merged PR, and HALT if it does not. The gate is verification-only — it NEVER creates or opens a PR (consistent with rule 6). The documented per-invocation exception is `--no-handoff-gate`, intended for spikes and other legitimately design-doc-less work; the override is not a transient-`gh`-failure retry mechanism.
+11. **A phase PR names its single review surface inline within Background.** When a PR is opened for a pipeline phase, the body names the one human review surface for that phase as a single bolded inline line within Background — `**Review surface for this phase:** {label} — {link}.` — never a new `##` heading. This is an inline addition consistent with rule 8 (it adds no section): see [review-audience.md](review-audience.md) for the classification, the per-phase surface labels, and the two mechanisms (`zego-create-pr`'s optional `review_surface` input and `zego-write-requirements`' inline composition) that emit it.
 
 ## Title format
 
@@ -118,3 +119,23 @@ gh pr create --title "AIDEV-16: Add pull-request standards file"
 AI review labels and workflow triggers (such as a `claude-review` label or a `/review` comment) invoke an automated reviewer that costs API credits and produces output that a human reviewer is then expected to read. Triggering a review on a draft, a work-in-progress branch, or a branch that will need significant rework wastes both budget and reviewer attention.
 
 Only apply review triggers when the branch is in a state you would merge today if the review came back clean.
+
+## Name the phase's single review surface
+
+A pipeline PR exists for one phase — design, implementation, requirements — and each phase has exactly one artefact a human is meant to review. Naming it on the PR stops reviewers spreading attention across the AI-native artefacts the phase also touches (task specs, findings files, diagnosis records), which carry their own deflecting banner per [review-audience.md](review-audience.md). The signal is a single bolded inline line within Background, so it costs the reviewer one line and adds no section:
+
+```
+# good — inline within Background, no new heading
+## Background
+
+The pipeline produced no signal telling reviewers which artefact to read.
+
+**Review surface for this phase:** the design document — docs/design/AIDEV-16-foo.md.
+
+# bad — a new top-level section (violates rule 8)
+## Review surface
+
+The design document — docs/design/AIDEV-16-foo.md.
+```
+
+Two mechanisms emit this identical line, depending on whether the phase PR is opened through `zego-create-pr`: the optional `review_surface` input (`zego-write-design-doc`/`-max`, `zego-implement`, `zego-fix-bug`) and inline composition (`zego-write-requirements`). See [review-audience.md](review-audience.md) for the per-phase labels and the full contract.

@@ -12,7 +12,7 @@ Read these sources, and only these:
    Then read the `ci-test-command` key from `CLAUDE.local.md` (it is
    team-owned, not fan-out-managed, and lives there so it survives standards
    bumps): if it is present, report its value and explain its purpose — it is
-   the explicit override for the commands the `ci-validation` flow runs before
+   the explicit override for the commands the `zego-ci-validation` flow runs before
    committing. If it is absent, say so and explain that validation then
    discovers the commands automatically from `.buildkite/pipeline.yml` or
    `.github/workflows/*.yml`, and that declaring `ci-test-command` is the fix
@@ -72,7 +72,7 @@ Frame this as the engineer having done exactly what we asked, never as a
 mistake. If CLAUDE.md has no entry for the skill, do not guess its role — note
 the CLAUDE.md↔disk mismatch per source 3 and report the skill as an extension
 whose pipeline role could not be determined. A disk-only off-path utility is
-likewise a sanctioned extension (`write-skill` Stage 12c permits leaving
+likewise a sanctioned extension (`zego-write-skill` Stage 12c permits leaving
 off-path skills out of the narrative): mention it as an off-path skill not
 covered by the narrative. Reserve "drift" language for genuine
 inconsistencies — a skill named in the narrative or CLAUDE.md but missing from

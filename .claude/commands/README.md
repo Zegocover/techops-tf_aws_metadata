@@ -18,7 +18,7 @@ Every fanned-out command filename takes a `zego-` prefix, so `zego-onboard.md` i
 
 The reason is namespace safety. Claude Code's command namespace is **flat and shared**: a command installed into `.claude/commands/` sits alongside Claude Code's built-in commands and any commands the team has authored locally, with no namespacing by source. An unprefixed `onboard.md` would collide with a team-authored `/onboard` and with any present or future built-in of the same name, and the resolution order between a library command and a built-in is **undocumented** — there is no guarantee which one runs. The `zego-` prefix reserves a private slice of the namespace for the library so library commands never clash with built-ins or local commands. It also groups them for autocomplete: typing `/zego-` lists the full library command set.
 
-See `docs/decisions/015-zego-command-prefix.md` for the full decision record and rejected alternatives.
+See `docs/decisions/016-zego-command-prefix.md` for the full decision record and rejected alternatives.
 
 ## Commands in this library
 

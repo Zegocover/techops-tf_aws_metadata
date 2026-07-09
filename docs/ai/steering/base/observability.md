@@ -1,6 +1,6 @@
 ---
-version: 1.2
-last_reviewed: 2026-06-02
+version: 1.3
+last_reviewed: 2026-06-19
 ---
 
 # Observability Standards
@@ -24,7 +24,7 @@ Where the surface is absent — the code emits no server-side metrics or traces,
 1. **Three-signal coverage.** Instrument all three signals — metrics, traces, and logs — because each answers a distinct diagnostic question; omitting one leaves a blind spot that forces guesswork during an incident.
 2. **OpenTelemetry as the instrumentation library.** Use OpenTelemetry for all metrics and tracing instrumentation — it is vendor-agnostic, prevents lock-in, and targets Datadog as the current backend for both metrics and APM.
 3. **Framework instrumentors before custom code.** Use framework instrumentors (HTTP server middleware, HTTP client instrumentors, gRPC interceptors) before writing custom spans or metrics — they cover the common cases without maintenance burden (e.g., FastAPI middleware in Python, Spring Boot auto-configuration in Java, otelgin/otelhttp in Go).
-4. **Register instrumentors explicitly at startup.** Register all instrumentors in service startup code rather than relying on auto-discovery — auto-discovery is non-deterministic and can behave inconsistently across package managers and build tools (e.g., uv in Python, Gradle shadow-jar in Java).
+4. **Declare instrumentors in the project manifest.** List each instrumentor as a declared project dependency (or pin it in the agent/runtime artifact, for runtimes that use one) so the manifest is the contract for what telemetry the service emits — what's checked in is what runs in production.
 5. **Outside-in instrumentation strategy.** Instrument service boundaries first (HTTP/gRPC servers and clients, async consumers and producers), then add internal spans only when boundary data is insufficient to diagnose a specific problem — starting inside out produces noise without covering the gaps that actually matter.
 6. **Counter, Histogram, UpDownCounter.** Choose the metric instrument that matches the measurement: Counter for cumulative counts (throughput, error rates), Histogram for latency distributions, UpDownCounter for current state (queue depth, active sessions) — using the wrong instrument produces misleading aggregations in Datadog.
 7. **OTel semantic conventions for metric naming.** Name metrics using lowercase dot-delimited namespaces with snake_case within components; prefix Zego-specific metrics with `zego.{service}` where `{service}` is the canonical service name (hyphens are permitted where the service name itself contains them); include explicit client/server direction (e.g. `http.client.request.duration` vs `http.server.request.duration`); omit unit suffixes from the name — they belong in metadata.
@@ -50,9 +50,9 @@ OpenTelemetry is the CNCF-standard instrumentation framework. Instrumenting agai
 
 Framework instrumentors for HTTP servers, HTTP clients, and gRPC cover the most common instrumentation points (request duration, error rates, downstream call latency) without requiring manual span management. Writing custom spans for cases already covered by an instrumentor duplicates work and drifts out of sync with framework updates. In Python, these are the FastAPI, HTTPX, and gRPC instrumentors; in Java, Spring Boot auto-configuration and OkHttp interceptors; in Go, otelgin/otelhttp and otelgrpc. See language-specific standards for implementation details.
 
-## Register instrumentors explicitly at startup
+## Declare instrumentors in the project manifest
 
-Auto-discovery mechanisms (e.g., `opentelemetry-instrument` in Python, the Java agent in Java) work by scanning installed packages or classpath entries at process start. Depending on the package manager or build tool, the scan can produce different results across runs or fail silently (e.g., uv in Python can resolve packages non-deterministically; fat-jar packaging in Java can shade out instrumentors). Explicit registration in the service startup code is deterministic and reviewable.
+The manifest is the contract for what telemetry a service emits. List each framework instrumentor you depend on — `pyproject.toml` in Python (FastAPI / HTTPX / gRPC instrumentors), `build.sbt` in Scala (Cinnamon modules) — in the same manifest that pins the rest of the project's dependencies, alongside the OTel distribution and exporter packages, so a reviewer can read off the manifest and know which spans and metrics the service will produce. Language standards cover the per-runtime mechanics (entrypoint, agent pinning, build configuration).
 
 ## Outside-in instrumentation strategy
 
