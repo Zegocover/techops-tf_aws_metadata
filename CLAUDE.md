@@ -1,7 +1,7 @@
 ---
 # managed by bin/bundle — do not edit; regenerated on every release
-standards_version: "1.4.1"
-built_at: 2026-07-07
+standards_version: "1.4.2"
+built_at: 2026-08-05
 ---
 
 # Claude AI Standards
