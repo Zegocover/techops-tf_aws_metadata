@@ -1,0 +1,3 @@
+# Repository-side configuration for the zego-standards plugin.
+min_channel = "stable"
+ci-test-command = "terraform fmt -check -recursive"
